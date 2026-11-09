@@ -2906,6 +2906,11 @@ const zhCN: Record<string, string> = {
   "taskList.unpin": "取消置顶任务",
   "taskList.rename": "重命名任务",
   "taskList.archive": "归档任务",
+  "taskList.archiveRunningTitle": "这个任务正在运行，仍要归档吗？",
+  "taskList.archiveRunningDescription":
+    "归档会关闭这个任务的主区会话，正在生成的内容会就此中断。\n可以取消并让它继续跑，也可以先停止再归档。",
+  "taskList.archiveRunningConfirm": "停止并归档",
+  "taskList.archiveStopFailed": "停止任务失败，未归档",
   "taskList.archiveFailed": "归档任务失败",
   "taskList.unarchive": "取消归档任务",
   "taskList.renamePlaceholder": "任务名称",
@@ -4376,8 +4381,10 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.fetchModelsCount": "共 {count} 个模型，点击选择",
   "settings.modelProvider.fetchModelsEmpty":
     "这个 API Key 在当前供应商下没有任何可用模型（供应商返回了空列表）。请到供应商后台给该 Key 授权模型，或直接手动填写模型 ID。",
-  "settings.modelProvider.fetchModelsUnsupported": "该供应商没有提供模型列表接口，请手动填写模型 ID。",
-  "settings.modelProvider.fetchModelsMissingCredentials": "请先填写并保存 API Key，再获取模型列表。",
+  "settings.modelProvider.fetchModelsUnsupported":
+    "该供应商没有提供模型列表接口，请手动填写模型 ID。",
+  "settings.modelProvider.fetchModelsMissingCredentials":
+    "请先填写并保存 API Key，再获取模型列表。",
   "settings.modelProvider.fetchModelsFilterPlaceholder": "筛选模型…",
   "settings.modelProvider.fetchModelsExpandParams": "展开 {modelId} 的参数设置",
   "settings.modelProvider.fetchModelsSelected": "已选 {count} 个模型",

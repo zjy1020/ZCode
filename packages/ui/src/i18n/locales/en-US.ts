@@ -3116,6 +3116,11 @@ const enUS: Record<string, string> = {
   "taskList.unpin": "Unpin task",
   "taskList.rename": "Rename task",
   "taskList.archive": "Archive task",
+  "taskList.archiveRunningTitle": "This task is still running. Archive it anyway?",
+  "taskList.archiveRunningDescription":
+    "Archiving closes the session in the main area, so whatever is being generated right now stops there.\nCancel to let it keep running, or stop it and then archive.",
+  "taskList.archiveRunningConfirm": "Stop and archive",
+  "taskList.archiveStopFailed": "Could not stop the task, so it was not archived",
   "taskList.archiveFailed": "Could not archive task",
   "taskList.unarchive": "Unarchive task",
   "taskList.renamePlaceholder": "Task name",
@@ -4696,8 +4701,7 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.fetchModelsSelected": "{count} models selected",
   "settings.modelProvider.fetchModelsAddSelected": "Add {count} models",
   "settings.modelProvider.fetchModelsAddSelectedDone": "Added {count} models",
-  "settings.modelProvider.fetchModelsAddSelectedExisting":
-    "{count} already added — skipped",
+  "settings.modelProvider.fetchModelsAddSelectedExisting": "{count} already added — skipped",
   "settings.modelProvider.fetchModelsAddSelectedFailed": "{count} failed: {names}",
   "settings.modelProvider.fetchModelsAlreadyAdded": "Added",
   "settings.modelProvider.fetchModelsEditorHint":

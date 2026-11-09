@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- 模型供应商卡片仍在迁移期集中维护多个紧耦合区块，后续拆分时再移除。 */
 import {
   useCallback,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -10,7 +11,7 @@ import type {
   ProviderSettingsFormProvider,
   ProviderSettingsFormModel,
 } from "@/lib/providerSettingsFormTypes.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type { ModelConnectivityResult, ProviderModelListResult } from "@zcode/shared";
 import type { ProviderApiType } from "@zcode/provider";
 import {
   TID_MODEL_PROVIDER_ADD_MODEL_BUTTON,
@@ -37,8 +38,16 @@ import { TECHNICAL_INPUT_ATTRIBUTES } from "@/lib/technicalInputAttributes.js";
 import { ApiKeyInput } from "./ApiKeyInput.js";
 import { ModelRowInput } from "./ProviderFormControls.js";
 import { PresetProviderApiKeyBanner } from "./PresetProviderApiKeyBanner.js";
-import { type ProviderModelDraftValues } from "@/settings/model-provider-section/ProviderModelMetadata.js";
-import { ProviderModelMetadataDialog } from "@/settings/model-provider-section/ProviderModelMetadataDialog.js";
+import {
+  createProviderModelDraftValues,
+  resolveProviderModelDraftCommit,
+  type ProviderModelDraftValues,
+} from "@/settings/model-provider-section/ProviderModelMetadata.js";
+import {
+  ProviderModelMetadataDialog,
+  type ProviderModelBatchItemInput,
+} from "@/settings/model-provider-section/ProviderModelMetadataDialog.js";
+import { projectModelDraft } from "@/settings/model-provider-section/ProviderModelDraftState.js";
 import {
   PROVIDER_CONNECTION_API_FORMATS,
   ProviderApiFormatSelect,
@@ -354,6 +363,7 @@ export function ProviderModelsSection({
   providerAccess,
   models,
   onTestModel,
+  onListProviderModels,
   onModelCommit,
   onModelEnabledChange,
   onDeleteModel,
@@ -367,6 +377,8 @@ export function ProviderModelsSection({
   providerAccess?: ProviderConfigObject["access"];
   models: ProviderSettingsFormModel[];
   onTestModel?: (model: string) => Promise<ModelConnectivityResult>;
+  /** 拉取上游模型列表（调用方负责先把卡片草稿落盘），供新增模型时挑选用。 */
+  onListProviderModels?: () => Promise<ProviderModelListResult>;
   onModelCommit: (
     originalModelId: string,
     model: ProviderSettingsFormModel,
@@ -462,11 +474,98 @@ export function ProviderModelsSection({
       setAddSaving(false);
     }
   }, [editor, onAddModel]);
+  /**
+   * 批量添加：整批只上锁一次。
+   *
+   * addSavingRef 原本是单条提交的重入锁（commitAddDraft 进入上锁、finally 释放）。顺序 await 的
+   * 批量如果在每个 model id 上各走一次 commitAddDraft，第二条就会被第一条留下的锁直接拒绝
+   * （commitAddDraft 首行 `if (addSavingRef.current) return false`），批量必然只成功一个。
+   * 所以这里在入口处一次性上锁：期间 handleAddDialogOpenChange 依旧拒绝关闭对话框、
+   * commitAddDraft 依旧拒绝重入，原有单条防重入语义完全保留，只是锁的持有范围从「一条」变成「一批」。
+   *
+   * 每条走完整的「解析推荐基线 → 投影草稿 → 提交」链路，而不是直接把裸 createEmptyModel 交给
+   * 上游：勾选清单里允许用户给每个模型单独填上下文窗口 / 最大输出，这两个字段必须经与单条保存
+   * 完全相同的提交函数才能既写进 Personal 覆盖、又能被缺省时回落到推荐值。
+   */
+  const handleAddModels = useCallback(
+    async (items: readonly ProviderModelBatchItemInput[]) => {
+      if (addSavingRef.current) {
+        return { added: 0, failed: items.map((item) => item.modelId) };
+      }
+      addSavingRef.current = true;
+      setAddSaving(true);
+      setAddCommitError(null);
+      const failed: string[] = [];
+      // 「已经加过」必须与「真的失败」分开报。以前两者混在 failed 里，用户看到
+      // 「已添加 0 个，2 个失败」，而那两个模型其实第一次就加成功了，他只能去猜
+      // 是不是模型 ID 没填 —— 病因从来没被说出来过。
+      const skipped: string[] = [];
+      const existingIds = new Set(models.map((model) => model.modelId));
+      let added = 0;
+      try {
+        for (const item of items) {
+          if (existingIds.has(item.modelId)) {
+            skipped.push(item.modelId);
+            continue;
+          }
+          try {
+            // 先向 Host 取该模型的推荐基线：inheritedConfig 里带着 contextWindow /
+            // maxOutputTokens / optionSpecs。少了这一步，projectModelDraft 补不出
+            // optionSpecs，reasoningLevelValues 会为空数组，提交必然 invalid。
+            const resolution = await resolveAddModelConfig(item.modelId);
+            const baseModel: ProviderSettingsFormModel = {
+              ...createEmptyModel(),
+              modelId: item.modelId,
+              inheritedConfig: resolution.inheritedConfig,
+              config: resolution.inheritedConfig,
+            };
+            // 行里改过的档位由对话框整体带过来（contextWindow / maxOutputTokens /
+            // 模态 / 能力 / 推理档位都可能在行内被改）。没带草稿的行走纯推荐值。
+            const batchDraft: ProviderModelDraftValues = {
+              ...createProviderModelDraftValues(baseModel),
+              ...item.draft,
+            };
+            const result = resolveProviderModelDraftCommit({
+              currentModel: baseModel,
+              draft: projectModelDraft(batchDraft, baseModel),
+            });
+            if (result.status === "invalid") {
+              failed.push(item.modelId);
+              continue;
+            }
+            await onAddModel(result.model);
+            added += 1;
+            // 同一批里出现重复 id 时也要挡住第二次，别指望刷新前的 models 列表。
+            existingIds.add(item.modelId);
+          } catch {
+            // 上游解析失败、或 Host 侧拒绝（例如同一模型已被别的窗口加上），走到这里。
+            // 一条失败不能中断整批，只如实记录失败 id 交给对话框汇总提示。
+            failed.push(item.modelId);
+          }
+        }
+      } finally {
+        addSavingRef.current = false;
+        setAddSaving(false);
+      }
+      return { added, failed, skipped };
+    },
+    [models, onAddModel, resolveAddModelConfig],
+  );
   const addDraftErrorMessage = addDraftErrorField
     ? intl.formatMessage({
         id: `settings.modelProvider.modelMetadata.invalid.${addDraftErrorField}`,
       })
     : null;
+  /**
+   * 这个供应商下已经存在的模型 id。
+   *
+   * 单独 memo 一份再往下传：对话框把「已添加」的行做成不可勾选，这个数组会进
+   * 它两个 useCallback 的依赖，每次渲染换一个新数组会把回调也换掉。
+   */
+  const existingModelIds = useMemo(
+    () => models.map((model) => model.modelId),
+    [models],
+  );
 
   return (
     <div>
@@ -576,6 +675,16 @@ export function ProviderModelsSection({
           saving={addSaving}
           modelConfigResolutionPending={editor.pending}
           modelDefaultsLoaded={editor.defaultsLoaded}
+          onFetchModels={onListProviderModels}
+          // 批量能力由必填的 onAddModel 顺序派生，所以这里总是透传；对话框侧 onAddModels
+          // 仍是可选 prop，其他直接渲染该对话框的宿主（如行内编辑态）自然不出现批量入口。
+          onAddModels={handleAddModels}
+          // 展开某个候选行时才去解析它的推荐基线；解析结果只用于行内 placeholder 与
+          // 推理档位选项，不写任何覆盖。
+          onResolveModelConfig={async (modelId) => (await resolveAddModelConfig(modelId)).inheritedConfig}
+          // 已经加过的模型由对话框标成「已添加」并拒绝勾选：重复添加的结局是一句
+          // 没有病因的「失败」，而用户根本没做错什么。
+          existingModelIds={existingModelIds}
           onModelIdBlur={() => {
             void editor.flush().catch(() => undefined);
           }}

@@ -6,7 +6,7 @@ import {
   type ProviderSettingsFormProvider,
   type ProviderSettingsFormModel,
 } from "@/lib/providerSettingsFormTypes.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type { ModelConnectivityResult, ProviderModelListResult } from "@zcode/shared";
 import {
   isApiKeyAccess,
   type ProviderApiType,
@@ -146,6 +146,7 @@ export function InlineEditableProviderCard({
   onDeletePersonalModel,
   onDelete,
   onTestModel,
+  onListProviderModels,
   onReorderModelIds,
   readOnlyEndpoints,
   presetApiKeyUrl,
@@ -173,6 +174,8 @@ export function InlineEditableProviderCard({
   onDeletePersonalModel?: (providerId: string, modelId: string) => Promise<unknown>;
   onDelete?: () => void | Promise<void>;
   onTestModel?: (providerId: string, modelId: string) => Promise<ModelConnectivityResult>;
+  /** 拉取上游模型列表；只有自定义供应商的「添加模型」会用到。 */
+  onListProviderModels?: (providerId: string) => Promise<ProviderModelListResult>;
   onReorderModelIds?: (modelIds: string[]) => Promise<void>;
   readOnlyEndpoints?: boolean;
   presetApiKeyUrl?: string;
@@ -629,6 +632,22 @@ export function InlineEditableProviderCard({
     [commitPendingDraft, onTestModel, provider.providerId],
   );
 
+  // 与 handleTestModel 同一条纪律：先把卡片里的 Provider 草稿落盘，再拿**已保存**的
+  // Base URL / API Key / 格式去问上游要模型列表；否则用户刚敲进去还没失焦的地址会被忽略。
+  const handleListProviderModels = useCallback(
+    async (): Promise<ProviderModelListResult> => {
+      if (!onListProviderModels) {
+        return Promise.resolve({
+          success: false,
+          error: { message: "Model list retrieval is unavailable" },
+        });
+      }
+      await commitPendingDraft("model-list");
+      return onListProviderModels(provider.providerId);
+    },
+    [commitPendingDraft, onListProviderModels, provider.providerId],
+  );
+
   const handleModelCommit = useCallback(
     async (
       originalModelId: string,
@@ -847,6 +866,7 @@ export function InlineEditableProviderCard({
           providerAccess={provider.config.access}
           models={models}
           onTestModel={onTestModel ? handleTestModel : undefined}
+          onListProviderModels={onListProviderModels ? handleListProviderModels : undefined}
           onModelCommit={handleModelCommit}
           onModelEnabledChange={handleModelEnabledChange}
           onDeleteModel={handleDeleteModel}

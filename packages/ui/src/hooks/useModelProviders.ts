@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type { ModelConnectivityResult, ProviderModelListResult } from "@zcode/shared";
 import type { ProviderSettingsView } from "@zcode/services";
 import { useServices } from "@/hooks/useServices.js";
 import { logger } from "@/logger.js";
@@ -223,6 +223,19 @@ export function useModelProviders(target: {
     ],
   );
 
+  /**
+   * 拉取供应商上游的模型列表，供「添加模型」时挑选。
+   *
+   * 与 testModelConnectivity 不同：它只读本机全局的 Provider 配置，不需要工作区，
+   * 也不经过 model registry，因此不必解析 workspacePath（见 ZCT-2112556538453495808 的历史约束）。
+   */
+  const listProviderModels = useCallback(
+    async (providerId: string): Promise<ProviderModelListResult> => {
+      return providerSettingsService.listProviderModels({ providerId });
+    },
+    [providerSettingsService],
+  );
+
   return {
     modelProviders: effectiveModelProviders,
     providerTemplates: providerSettingsView?.providerTemplates ?? [],
@@ -244,6 +257,7 @@ export function useModelProviders(target: {
     reorderProviderModels,
     saveDisplayOrder,
     testModelConnectivity,
+    listProviderModels,
     providerSettingsView,
   };
 }

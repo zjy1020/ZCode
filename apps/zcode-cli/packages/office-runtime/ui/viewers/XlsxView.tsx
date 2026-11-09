@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -105,6 +106,15 @@ const FIND_CURRENT_STYLE: CSSProperties = {
   backgroundColor: "rgba(255, 140, 0, 0.6)",
   boxShadow: "inset 0 0 0 1px #e07b00",
 };
+/**
+ * A range of the user's own that the shell has taken into the AI-edit draft, blue like the docx and
+ * pdf "user highlight" so it never reads as the agent's reveal (amber) or a find hit (yellow).
+ *
+ * Literal colours, not `var(--hl-user)`: cells are painted onto a canvas, and a `var(...)` string
+ * is not a valid `fillStyle`/`strokeStyle` value — the assignment is silently dropped.
+ */
+const MARK_FILL = "rgba(0, 106, 255, 0.26)";
+const MARK_EDGE = "2px solid #0079ff";
 
 const inside = (item: Highlight, sheet: string, row: number, col: number) =>
   item.sheet === sheet &&
@@ -300,16 +310,59 @@ export const XlsxView = forwardRef<ViewerHandle, ViewerProps>(function XlsxView(
     };
   }, []);
 
+  /**
+   * The shell's picks as cell rectangles: parsed the way `reveal` parses its targets, but painted
+   * only — the grid's own selection stays where the last click left it.
+   */
+  const marks = useMemo<Highlight[]>(() => {
+    const tabs = controllerRef.current.tabs;
+    const out: Highlight[] = [];
+    for (const at of props.marks ?? []) {
+      let locator: ReturnType<typeof parseLocator>;
+      try {
+        locator = parseLocator("xlsx", at);
+      } catch {
+        continue; // A malformed location is the shell's to report, not the grid's.
+      }
+      if (locator.kind !== "xlsx" || !locator.range) continue;
+      const sheet = locator.sheet;
+      const range = locator.range;
+      let tab = tabs.findIndex((item) => item.name === sheet);
+      if (tab < 0)
+        tab = tabs.findIndex((item) => item.name.toLowerCase() === sheet.toLowerCase());
+      if (tab < 0) continue;
+      out.push({
+        sheet: tabs[tab].name,
+        top: range.start.row - 1,
+        left: range.start.col - 1,
+        bottom: range.end.row - 1,
+        right: range.end.col - 1,
+      });
+    }
+    return out;
+  }, [props.marks, controller.tabs.length]);
+
   const getCellStyle = useCallback(
     (context: XlsxCellStyleContext): CSSProperties | undefined => {
       const { row, col } = context.cell;
+      // The user's own picks win over whatever the agent revealed or the find box painted.
+      const picked = marks.find((item) => inside(item, context.sheetName, row, col));
+      if (picked)
+        return {
+          backgroundColor: MARK_FILL,
+          // Outline the range's rim only: a full grid inside a big pick reads as noise.
+          ...(row === picked.top ? { borderTop: MARK_EDGE } : null),
+          ...(row === picked.bottom ? { borderBottom: MARK_EDGE } : null),
+          ...(col === picked.left ? { borderLeft: MARK_EDGE } : null),
+          ...(col === picked.right ? { borderRight: MARK_EDGE } : null),
+        };
       const current = found.items[found.current];
       if (current && inside(current, context.sheetName, row, col)) return FIND_CURRENT_STYLE;
       if (found.items.some((item) => inside(item, context.sheetName, row, col))) return FIND_STYLE;
       if (revealed.some((item) => inside(item, context.sheetName, row, col))) return REVEAL_STYLE;
       return undefined;
     },
-    [revealed, found],
+    [marks, revealed, found],
   );
 
   function tabIndexFor(name: string): number {

@@ -89,27 +89,20 @@ export const TaskList = memo(function TaskList({
   const taskLookup = useMemo(() => [...tasks, ...pinnedTasks], [pinnedTasks, tasks]);
   const startDraft = useZCodeSessionStore((state) => state.startDraft);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
-  const [pendingArchiveTaskId, setPendingArchiveTaskId] = useState<string | null>(null);
   const [renamingTaskId, setRenamingTaskId] = useState<string | null>(null);
   const [contextMenuTaskId, setContextMenuTaskId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const pendingArchiveTaskIdRef = useRef<string | null>(pendingArchiveTaskId);
   const renamingTaskIdRef = useRef<string | null>(renamingTaskId);
   const onSelectTaskRef = useRef(onSelectTask);
   const onSetTaskPinnedRef = useRef(onSetTaskPinned);
   const onArchiveTaskRef = useRef(onArchiveTask);
   const onSetTaskUnreadRef = useRef(onSetTaskUnread);
-  pendingArchiveTaskIdRef.current = pendingArchiveTaskId;
   renamingTaskIdRef.current = renamingTaskId;
   onSelectTaskRef.current = onSelectTask;
   onSetTaskPinnedRef.current = onSetTaskPinned;
   onArchiveTaskRef.current = onArchiveTask;
   onSetTaskUnreadRef.current = onSetTaskUnread;
-  const handleCancelArchiveConfirm = useCallback(() => {
-    setPendingArchiveTaskId(null);
-  }, []);
-
   const handleCancelRenameTask = useCallback(() => {
     setRenamingTaskId(null);
     setRenameDraft("");
@@ -121,9 +114,6 @@ export const TaskList = memo(function TaskList({
   const handleOpenTaskContextMenu = useCallback((taskId: string) => {
     // 以前每个 task row 都常驻一个 Radix ContextMenu root/trigger。
     // 现在 row 只上报目标 task，真正的菜单树由列表级单例挂载，避免大会话里按行放大 Popper/MenuProvider 成本。
-    if (pendingArchiveTaskIdRef.current === taskId) {
-      setPendingArchiveTaskId(null);
-    }
     setContextMenuTaskId(taskId);
   }, []);
 
@@ -147,15 +137,11 @@ export const TaskList = memo(function TaskList({
         handleCancelRenameTask();
       }
 
-      if (pendingArchiveTaskIdRef.current !== taskId) {
-        // 侧边栏 hover 操作现在改成“归档任务”，但它依旧会让任务从当前列表立刻消失，
-        // 如果首击就直接执行，用户很容易把“临时收起”误触成“怎么整条任务没了”。
-        // 这里改成“首次点击进入待确认态，二次点击原位确认”，既保留保护，也不离开当前上下文。
-        setPendingArchiveTaskId(taskId);
-        return;
-      }
-
-      setPendingArchiveTaskId(null);
+      // 交互调整：归档不再要求二次确认。
+      // 旧实现首击只进入待确认态、二次点击才真正归档，理由是“任务会立刻从列表消失，
+      // 容易误触”。实测下来这个保护反而更糟：用户点一下只看到按钮变成红色“确认”，
+      // 会以为自己没点上甚至以为按钮坏了，然后再点一次才生效。
+      // 现在单击即归档；任务仍可从归档视图恢复，代价远小于每次归档都要点两下。
       await onArchiveTaskRef.current(taskId);
     },
     [handleCancelRenameTask, readOnlyReason],
@@ -172,7 +158,6 @@ export const TaskList = memo(function TaskList({
         workspaceIdentity,
         titleLength: currentTitle.length,
       });
-      setPendingArchiveTaskId(null);
       setRenamingTaskId(taskId);
       setRenameDraft(currentTitle ?? "");
     },
@@ -197,7 +182,6 @@ export const TaskList = memo(function TaskList({
       if (readOnlyReason) {
         return;
       }
-      setPendingArchiveTaskId(null);
       handleCancelRenameTask();
       await onArchiveTaskRef.current(taskId);
     },
@@ -324,17 +308,6 @@ export const TaskList = memo(function TaskList({
     return orderedTasks;
   }, [sortBy, tasks]);
   useEffect(() => {
-    if (!pendingArchiveTaskId) {
-      return;
-    }
-
-    const stillExists = visibleSourceTasks.some((task) => task.taskId === pendingArchiveTaskId);
-    if (!stillExists) {
-      setPendingArchiveTaskId(null);
-    }
-  }, [pendingArchiveTaskId, visibleSourceTasks]);
-
-  useEffect(() => {
     if (!renamingTaskId) {
       return;
     }
@@ -383,8 +356,6 @@ export const TaskList = memo(function TaskList({
         }
         onSelectTask={handleSelectTaskItem}
         onArchiveTaskInline={handleArchiveTaskFromInline}
-        onCancelArchiveConfirm={handleCancelArchiveConfirm}
-        isArchiveConfirming={pendingArchiveTaskId === task.taskId}
         onTogglePinTask={handleTogglePinTask}
         onStartRenameTask={handleStartRenameTask}
         onArchiveTask={handleArchiveTask}

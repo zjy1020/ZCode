@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { DiffViewer } from "@/components/ui/diff-viewer.js";
 import { HighlightedLightweightDiffPreview } from "@/components/ui/highlighted-lightweight-diff-preview.js";
+import { useSettledValue } from "@/hooks/useSettledValue.js";
 import { inferCodeLanguage } from "@/lib/codeViewer.js";
+import { resolveCodePreviewTheme } from "@/lib/codePreviewPreferences.js";
 import { getPlainTextPatchFallbackLines } from "@/lib/patchDiffPreview.js";
 import type { CodePreviewSettings } from "@/store/index.js";
 
@@ -20,11 +22,18 @@ export function PatchFallbackContent({
   sourcePath,
   sourceTitle,
 }: PatchFallbackContentProps) {
-  const plainTextFallbackLines = useMemo(() => getPlainTextPatchFallbackLines(patch), [patch]);
+  // 正在被写入的文件，patch 文本会连续刷新；这里只对「停下来之后」的那一份做
+  // 行重建 / 语言推断 / 渲染，避免每次写入都整份重算（主线程 Shiki + diffs Shadow DOM）。
+  // 首次打开仍然立刻拿到内容，只有后续连续变化才被合并（见 useSettledValue）。
+  const settledPatch = useSettledValue(patch);
+  const plainTextFallbackLines = useMemo(
+    () => getPlainTextPatchFallbackLines(settledPatch),
+    [settledPatch],
+  );
   const highlightPath = sourcePath ?? sourceTitle;
   const highlightLanguage = useMemo(
-    () => inferCodeLanguage(highlightPath, patch),
-    [highlightPath, patch],
+    () => inferCodeLanguage(highlightPath, settledPatch),
+    [highlightPath, settledPatch],
   );
   const highlightTheme =
     resolvedTheme === "dark" ? codePreviewSettings.darkTheme : codePreviewSettings.lightTheme;
@@ -49,11 +58,11 @@ export function PatchFallbackContent({
 
   return (
     <DiffViewer
-      patch={patch}
+      patch={settledPatch}
       diffClassName="block"
       fontSizePx={codePreviewSettings.fontSizePx}
-      lightTheme={codePreviewSettings.lightTheme}
-      darkTheme={codePreviewSettings.darkTheme}
+      lightTheme={resolveCodePreviewTheme("light", codePreviewSettings)}
+      darkTheme={resolveCodePreviewTheme("dark", codePreviewSettings)}
       themeType={resolvedTheme}
     />
   );

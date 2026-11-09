@@ -15,17 +15,23 @@ export function ModelEditorAdvanced({
   open,
   errorField,
   validationAttempt,
+  defaultExpanded = false,
   children,
 }: {
   open: boolean;
   errorField?: ErrorField | null;
   validationAttempt: number;
+  /**
+   * 初始是否展开。嵌套在别处的折叠里（批量清单的行参数）时必须为 true：那一层折叠本身就
+   * 是「展开这一行的完整参数」，里面再默认收一次，用户看到的就是「只覆盖了两项」。
+   */
+  defaultExpanded?: boolean;
   children: ReactNode;
 }) {
   const { intl } = useZCodeIntl();
   const ref = useRef<HTMLDivElement>(null);
   const contentId = useId();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   useEffect(() => {
     if (!open) {
       setExpanded(false);

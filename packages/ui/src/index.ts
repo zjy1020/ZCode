@@ -117,5 +117,25 @@ export { recordArmsCustomEventForE2E } from "./lib/armsCustomEventObservability.
 export { generateMobileDeviceFingerprint, setStreamClientId } from "./lib/streamClientId.js";
 export { GlobalDatabaseStartupLoading } from "./root/GlobalDatabaseStartupLoading.js";
 
+// 外观扩展层：随 UI 包一起装配（幂等、可在任意窗口安全重复调用）。
+// 它只把配色与字体写成根元素上的内联 CSS 变量，不依赖任何上游服务；
+// 升级 ZCode 后的重放步骤、以及卸载方式见 src/theme-ext/UPGRADE.md。
+// 走 `theme-ext/index.js` 这个自包含入口而不是逐个深链子模块：上游升级后
+// 「整个目录拷回来 + 这一处的导出名单不变」就能迁移，深链会让迁移面随文件数扩散。
+export {
+  installThemeExt,
+  uninstallThemeExt,
+  isThemeExtInstalled,
+  setThemeExtSettings,
+  getThemeExtSnapshot,
+} from "./theme-ext/index.js";
+// 注意：`export { x } from "..."` 只在导出侧建立绑定，不会在当前作用域声明 `x`，
+// 所以下面这个调用点必须另有一条 import，否则是 ReferenceError。
+import { installThemeExt } from "./theme-ext/index.js";
+
+// 唯一的自动装配点：web 与 desktop 的 renderer 启动时都会 import 本入口，
+// 因此在这里装上即可，不必改各端的 main.tsx。调用是幂等的、且在没有 DOM 的
+// 环境里直接返回，重复 import 不会叠加副作用。
+installThemeExt();
 export { LocalTtftObserver, setLocalTtftObserver } from "@/v4/telemetry/local-ttft/contract.js";
 export { ensurePendingTaskDraft } from "@/v4/composer/composerDraftStore.js";

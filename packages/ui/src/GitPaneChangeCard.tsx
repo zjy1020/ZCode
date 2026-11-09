@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/context-menu.js";
 import { getDiffFallbackMessageId, getGitPaneDiffPreviewPlan } from "@/GitPane/helpers.js";
 import { FileDisplayInline } from "@/lib/fileDisplay.js";
+import { resolveCodePreviewTheme } from "@/lib/codePreviewPreferences.js";
 import type { GitPaneFileChange } from "@/hooks/useGitRepository.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type { CodePreviewSettings } from "@/store/index.js";
@@ -173,8 +174,8 @@ export function GitPaneChangeCard({
                 patch={diffState.patch}
                 diffClassName="block"
                 fontSizePx={codePreviewSettings.fontSizePx}
-                lightTheme={codePreviewSettings.lightTheme}
-                darkTheme={codePreviewSettings.darkTheme}
+                lightTheme={resolveCodePreviewTheme("light", codePreviewSettings)}
+                darkTheme={resolveCodePreviewTheme("dark", codePreviewSettings)}
                 themeType={resolvedTheme}
               />
             </div>
@@ -189,8 +190,8 @@ export function GitPaneChangeCard({
                 newFile={multiFileDiffFiles.newFile}
                 diffClassName="block"
                 fontSizePx={codePreviewSettings.fontSizePx}
-                lightTheme={codePreviewSettings.lightTheme}
-                darkTheme={codePreviewSettings.darkTheme}
+                lightTheme={resolveCodePreviewTheme("light", codePreviewSettings)}
+                darkTheme={resolveCodePreviewTheme("dark", codePreviewSettings)}
                 themeType={resolvedTheme}
               />
             </div>

@@ -49,6 +49,7 @@ import {
   PagePill,
   SelectionBar,
   offscreenText,
+  type AskLine,
   type BarMode,
 } from "#ui/shell/parts.tsx";
 import { CLOSED_FIND, useFind } from "#ui/shell/useFind.ts";
@@ -95,6 +96,16 @@ function Shell() {
   pickedRef.current = picked;
   const [barMode, setBarMode] = useState<BarMode>("bar");
   const [copied, setCopied] = useState(false);
+  /** Ranges added with ⌘/Ctrl, oldest first; the live selection is kept separately. */
+  const [pins, setPins] = useState<Selection[]>([]);
+  /** Lines added in the AI-edit panel, oldest first: sent together, so they outlive the bar. */
+  const [askDraft, setAskDraft] = useState<AskLine[]>([]);
+  /** What is typed in the AI-edit box; the bar remounts on every selection change. */
+  const [askText, setAskText] = useState("");
+  /** ⌘/Ctrl was down when the last press in the grid started, so it adds rather than replaces. */
+  const multi = useRef(false);
+  const askDraftRef = useRef(askDraft);
+  askDraftRef.current = askDraft;
   const [agent, setAgent] = useState<AgentPointer | null>(null);
   const [changed, setChanged] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -165,6 +176,9 @@ function Shell() {
     viewerReady.current = false;
     setReady(false);
     setPicked(null);
+    setPins([]);
+    setAskDraft([]);
+    setAskText("");
     setBarMode("bar");
     setAgent(null);
     setOffscreen(null);
@@ -331,6 +345,27 @@ function Shell() {
   const onSelect = useCallback((next: Selection | null, detail?: SelectionDetail) => {
     setBarMode("bar");
     setCopied(false);
+    if (next && detail && multi.current) {
+      // ⌘/Ctrl: keep what was selected and add this. Acting on a range that is already pinned
+      // takes it out again, so the modifier works as a toggle.
+      const previous = pickedRef.current;
+      setPins((current) => {
+        const without = current.filter((item) => item.at !== next.at);
+        if (without.length !== current.length) return without;
+        if (!previous || previous.selection.at === next.at) return current;
+        // What a draft line already covers is not collected a second time.
+        const covered = askDraftRef.current.some((line) =>
+          line.ranges.includes(previous.selection.at),
+        );
+        if (covered) return current;
+        return [
+          ...current.filter((item) => item.at !== previous.selection.at),
+          previous.selection,
+        ];
+      });
+    } else {
+      setPins([]);
+    }
     setPicked(next && detail ? { selection: next, detail } : null);
     // Acting on the page dismisses the agent's note (its marks stay).
     if (next && detail?.user) setAgent((current) => current && { ...current, visible: false });
@@ -357,12 +392,21 @@ function Shell() {
     canvas.addEventListener("wheel", unpin, { passive: true });
     canvas.addEventListener("pointerdown", unpin, true);
     canvas.addEventListener("keydown", unpin, true);
+    // Read the modifier on the way down, in the capture phase, so it is known before the viewer
+    // reports the selection that press produces.
+    const mark = (event: PointerEvent | KeyboardEvent) => {
+      multi.current = event.ctrlKey || event.metaKey;
+    };
+    canvas.addEventListener("pointerdown", mark, true);
+    canvas.addEventListener("keydown", mark, true);
     return () => {
       clearTimeout(timer);
       resize.disconnect();
       canvas.removeEventListener("wheel", unpin);
       canvas.removeEventListener("pointerdown", unpin, true);
       canvas.removeEventListener("keydown", unpin, true);
+      canvas.removeEventListener("pointerdown", mark, true);
+      canvas.removeEventListener("keydown", mark, true);
     };
   }, [doc]);
   // Clicking one of the agent's marks brings its note back, when there is one to show.
@@ -373,21 +417,44 @@ function Shell() {
     return true;
   }, []);
 
+  /** Every range an action applies to: the ⌘/Ctrl pins first, then the live selection. */
+  const allRanges = useCallback(
+    () => [...pins, ...(picked ? [picked.selection] : [])],
+    [pins, picked],
+  );
+
+  /**
+   * What the grid keeps painted: every range a draft line already covers, plus the picks held with
+   * ⌘/Ctrl. The viewer collapses its own selection to the last click, so this is the only way a
+   * pick stays visible while the next one is chosen. Locators, not anchors.
+   */
+  const marks = useMemo(
+    () => [
+      ...new Set([...askDraft.flatMap((line) => line.ranges), ...pins.map((item) => item.at)]),
+    ],
+    [askDraft, pins],
+  );
+
   const clearSelection = useCallback(() => {
     viewer.current?.clearSelection();
     setPicked(null);
+    setPins([]);
     setBarMode("bar");
   }, []);
 
   const addReference = useCallback(async () => {
     const current = docRef.current;
-    if (!current || !picked) return;
-    const anchor = formatAnchor(current.info.path, picked.selection.at);
-    const text = picked.selection.text;
-    const next = [
-      ...references.current.filter((item) => item.anchor !== anchor || item.text !== text),
-      { anchor, text },
-    ].slice(-10);
+    const ranges = allRanges();
+    if (!current || !ranges.length) return;
+    const merged = [...references.current];
+    for (const item of ranges) {
+      const anchor = formatAnchor(current.info.path, item.at);
+      const text = item.text;
+      const at = merged.findIndex((entry) => entry.anchor === anchor && entry.text === text);
+      if (at >= 0) merged.splice(at, 1);
+      merged.push({ anchor, text });
+    }
+    const next = merged.slice(-10);
     const lines = next.map(
       (item) => `- ${item.anchor}${item.text ? `: "${clip(item.text, 600)}"` : ""}`,
     );
@@ -406,35 +473,75 @@ function Shell() {
       });
       references.current = next;
       setBarMode("added");
-      const added = picked;
+      const shown = picked;
       setTimeout(() => {
-        if (pickedRef.current === added) clearSelection();
+        if (pickedRef.current === shown) clearSelection();
       }, 1500);
     } catch {
       showNotice(t.contextFailed);
     }
-  }, [picked, clearSelection, showNotice, t]);
+  }, [allRanges, picked, clearSelection, showNotice, t]);
 
-  const ask = useCallback(
-    async (question: string) => {
+  /** A draft line for the current ranges: the anchors to act on and what to do with them. */
+  const lineFor = useCallback(
+    (question: string): AskLine | null => {
       const current = docRef.current;
-      if (!current || !picked) return false;
-      const anchor = formatAnchor(current.info.path, picked.selection.at);
-      const text = picked.selection.text;
-      const quote = text ? `\n> ${clip(text, 800).replace(/\n/g, "\n> ")}` : "";
+      const ranges = allRanges();
+      if (!current || !ranges.length) return null;
+      const text = ranges[0].text;
+      return {
+        at: ranges.map((item) => formatAnchor(current.info.path, item.at)),
+        ranges: ranges.map((item) => item.at),
+        labels: ranges.map((item) => describeAt(item.at, t)),
+        question,
+        quote: text ? `\n> ${clip(text, 800).replace(/\n/g, "\n> ")}` : "",
+      };
+    },
+    [allRanges, t],
+  );
+
+  /**
+   * Adding a line sends nothing: the user builds one request per range and sends them together,
+   * which is why the panel stays open and the box keeps what was typed.
+   */
+  const addAskLine = useCallback(
+    (question: string) => {
+      const line = lineFor(question);
+      if (!line) return;
+      setAskDraft((current) => [...current, line]);
+      // The line now carries these ranges, so the next group starts empty — and the grid keeps
+      // them painted through `marks`, which is how the user picks the next one without guessing.
+      setPins([]);
+    },
+    [lineFor],
+  );
+
+  const removeAskLine = useCallback((index: number) => {
+    setAskDraft((current) => current.filter((_, at) => at !== index));
+  }, []);
+
+  /** One message, one block per line, so each request keeps the range it is about. */
+  const sendAskDraft = useCallback(
+    async (pending: string) => {
+      const lines = [...askDraft];
+      if (pending) {
+        const line = lineFor(pending);
+        if (line) lines.push(line);
+      }
+      if (!lines.length) return false;
+      const body = lines
+        .map((line) => {
+          const quote = line.quote ?? "";
+          return `${line.question}\n\n(About ${line.at.join(", ")} in the ${PROFILE.title.en} viewer${quote ? ":" : "."})${quote}`;
+        })
+        .join("\n\n");
       try {
         const result = await host.app.sendMessage({
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: wellFormed(
-                `${question}\n\n(About ${anchor} in the ${PROFILE.title.en} viewer${quote ? ":" : "."})${quote}`,
-              ),
-            },
-          ],
+          content: [{ type: "text", text: wellFormed(body) }],
         });
         if (result.isError) throw new Error();
+        setAskDraft([]);
         clearSelection();
         return true;
       } catch {
@@ -442,7 +549,7 @@ function Shell() {
         return false;
       }
     },
-    [picked, clearSelection, showNotice, t],
+    [askDraft, lineFor, clearSelection, showNotice, t],
   );
 
   const copy = useCallback(async () => {
@@ -533,6 +640,7 @@ function Shell() {
             info: doc.info,
             blocks: doc.blocks,
             dark,
+            marks,
             glance: inline,
             onLocation: setLocation,
             onSelect,
@@ -546,12 +654,14 @@ function Shell() {
           }
         : null,
     // `t` only words errors; a locale change does not need a new viewer.
-    [doc, dark, inline, onReady, onSelect, onRevealHit],
+    [doc, dark, marks, inline, onReady, onSelect, onRevealHit],
   );
 
   const showSkeleton = !failure && (Boolean(pending) || Boolean(doc && !ready));
   const nothing = !doc && !pending && !failure;
-  const label = picked ? describeAt(picked.selection.at, t) : "";
+  /** Every selected range, in the order it was selected: the bar names them all. */
+  const selectedRanges = allRanges();
+  const label = selectedRanges.map((item) => describeAt(item.at, t)).join(", ");
 
   if (inline)
     return (
@@ -708,12 +818,36 @@ function Shell() {
                 mode={barMode}
                 canAsk={Boolean(host.capabilities?.message)}
                 copied={copied}
+                multi={doc.info.kind === "xlsx"}
+                draft={askDraft}
+                question={askText}
+                onQuestion={setAskText}
                 onAdd={() => void addReference()}
                 onAsk={() => setBarMode("ask")}
                 onCopy={() => void copy()}
                 onCancelAsk={() => setBarMode("bar")}
-                onSend={ask}
+                onAddLine={addAskLine}
+                onRemoveLine={removeAskLine}
+                onSendAll={sendAskDraft}
               />
+            ) : null}
+            {/*
+              The draft outlives the selection: with nothing picked the bar above is gone, and
+              without this dock the only way back to the send button would be to select yet another
+              range. Sending never needed one — say what is waiting and offer the button.
+            */}
+            {doc && ready && !failure && !picked?.detail.user && askDraft.length ? (
+              <div className="ask-dock" role="status">
+                <span className="count">{t.askDockPending(askDraft.length)}</span>
+                <span className="hint">{t.askDockHint}</span>
+                <button
+                  type="button"
+                  className="btn sm primary"
+                  onClick={() => void sendAskDraft("")}
+                >
+                  {t.askSendAll(askDraft.length)}
+                </button>
+              </div>
             ) : null}
             {agent?.visible && agent.targets[agent.index] && !failure ? (
               <AgentCallout

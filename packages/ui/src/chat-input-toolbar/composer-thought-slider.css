@@ -1,7 +1,131 @@
+/*
+ * 思考强度滑块的视觉层。
+ *
+ * 造型移植自上游 dsh-better-reasoning-effort 的 Composer 滑块（MIT）：满高渐变轨道、
+ * 贴合进度前沿的光斑、白色圆钮、canvas 星尘层。上游把色值写死在规则里、再用
+ * `body:not([data-ds-dark-theme])` 分浅色，本仓库相反——色值全部收进
+ * `--composer-thought-*` 变量，浅色为默认、深色在 `.dark` / `.theme-zai-dark` 下覆盖，
+ * 这样两套主题各自取色，也不必关心宿主用的是哪个主题类。
+ *
+ * 交互层（`.composer-thought-range` 的原生 range、档位圆点、气泡层）保持原样：
+ * 外部测试与既有手感都依赖它们的几何与过渡时长。
+ */
 .composer-thought-slider {
   /* 参考图中的白色滑块在两套主题下保持一致，轨道与档位圆点继续使用语义主题色。 */
   --composer-thought-slider-thumb: var(--color-white);
   --composer-thought-max-accent: var(--color-blue-500);
+
+  /* 浅色取自上游的浅色方案：雾蓝轨道 + 白蓝填充 + 蓝色光晕。 */
+  --composer-thought-track-bg: linear-gradient(
+    100deg,
+    #eef6ff 0%,
+    #e2efff 34%,
+    #d3e7fd 66%,
+    #bfdaf7 100%
+  );
+  --composer-thought-track-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92), inset 0 0 0 1px rgba(80, 133, 194, 0.16),
+    0 3px 10px rgba(48, 101, 165, 0.13);
+  --composer-thought-fill-bg: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #e2f0ff 20%,
+    #a8d0fb 57%,
+    #438fdf 100%
+  );
+  --composer-thought-flare-bg: radial-gradient(
+    ellipse at 100% 50%,
+    rgba(255, 255, 255, 0.98) 0 5%,
+    rgba(204, 231, 255, 0.88) 13%,
+    rgba(91, 162, 241, 0.48) 31%,
+    rgba(37, 111, 207, 0.16) 53%,
+    transparent 75%
+  );
+  --composer-thought-flare-streak-x: linear-gradient(
+    90deg,
+    transparent,
+    rgba(116, 177, 244, 0.34),
+    #ffffff,
+    rgba(66, 139, 225, 0.58),
+    transparent
+  );
+  --composer-thought-flare-streak-y: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 255, 255, 0.94),
+    transparent
+  );
+  --composer-thought-flare-streak-shadow-x: 0 0 7px rgba(58, 133, 222, 0.5),
+    0 0 13px rgba(104, 176, 255, 0.38);
+  --composer-thought-flare-streak-shadow-y: 0 0 7px rgba(64, 137, 224, 0.44);
+  --composer-thought-knob-border: rgba(126, 160, 197, 0.32);
+  --composer-thought-knob-shadow: 0 0 0 2px rgba(58, 124, 207, 0.09),
+    0 0 13px rgba(48, 118, 207, 0.3), 0 3px 8px rgba(39, 77, 119, 0.18);
+  --composer-thought-knob-shadow-top: 0 0 0 3px rgba(36, 105, 192, 0.15),
+    0 0 20px rgba(25, 100, 201, 0.45), 0 3px 8px rgba(39, 77, 119, 0.18);
+  --composer-thought-particle-rgb: 40, 118, 205;
+  --composer-thought-canvas-opacity: 0.78;
+  --composer-thought-canvas-blend: multiply;
+  --composer-thought-breathe: composer-thought-light-breathe;
+}
+
+/*
+ * 深色取自上游的深色方案：靛蓝到紫的星野，填充段改成半透明辉光带，
+ * 让光斑与星尘仍然是主角。
+ */
+.dark .composer-thought-slider,
+.theme-zai-dark .composer-thought-slider {
+  --composer-thought-track-bg: linear-gradient(
+    100deg,
+    #03040a 0%,
+    #071126 22%,
+    #101d4c 45%,
+    #302262 70%,
+    #5d35a0 100%
+  );
+  --composer-thought-track-shadow:
+    inset 0 1px 0 rgba(189, 199, 255, 0.15), inset 0 -1px 0 rgba(0, 0, 0, 0.55),
+    0 3px 10px rgba(12, 17, 55, 0.34);
+  --composer-thought-fill-bg: linear-gradient(
+    90deg,
+    rgba(82, 130, 255, 0.28) 0%,
+    rgba(112, 135, 255, 0.42) 55%,
+    rgba(168, 113, 255, 0.5) 100%
+  );
+  --composer-thought-flare-bg: radial-gradient(
+    ellipse at 100% 50%,
+    rgba(255, 255, 255, 0.96) 0 4%,
+    rgba(188, 189, 255, 0.8) 11%,
+    rgba(106, 87, 255, 0.5) 28%,
+    rgba(105, 31, 255, 0.2) 49%,
+    transparent 74%
+  );
+  --composer-thought-flare-streak-x: linear-gradient(
+    90deg,
+    transparent,
+    rgba(100, 160, 255, 0.42),
+    #f1ecff,
+    rgba(193, 82, 255, 0.65),
+    transparent
+  );
+  --composer-thought-flare-streak-y: linear-gradient(
+    180deg,
+    transparent,
+    rgba(196, 190, 255, 0.84),
+    transparent
+  );
+  --composer-thought-flare-streak-shadow-x: 0 0 7px #9b7cff, 0 0 13px rgba(72, 132, 255, 0.64);
+  --composer-thought-flare-streak-shadow-y: 0 0 7px #9c7cff;
+  --composer-thought-knob-border: rgba(255, 255, 255, 0.94);
+  --composer-thought-knob-shadow: 0 0 0 2px rgba(92, 105, 255, 0.12),
+    0 0 14px rgba(121, 82, 255, 0.48), 0 2px 7px rgba(0, 0, 0, 0.3);
+  --composer-thought-knob-shadow-top: 0 0 0 3px rgba(119, 99, 255, 0.18),
+    0 0 22px rgba(135, 78, 255, 0.76), 0 0 34px rgba(53, 121, 255, 0.34),
+    0 3px 8px rgba(0, 0, 0, 0.3);
+  --composer-thought-particle-rgb: 148, 132, 255;
+  --composer-thought-canvas-opacity: 1;
+  --composer-thought-canvas-blend: screen;
+  --composer-thought-breathe: composer-thought-dark-breathe;
 }
 
 .composer-thought-slider[data-disabled="true"] {
@@ -9,18 +133,133 @@
 }
 
 .composer-thought-slider:has(input:focus-visible) {
-  outline: 2px solid var(--color-ring);
+  /* `--color-ring` 在本仓库没有定义（全仓只有引用），补一层兜底让焦点环真的可见。 */
+  outline: 2px solid var(--color-ring, var(--color-brand));
   outline-offset: 2px;
+}
+
+.composer-thought-track {
+  background: var(--composer-thought-track-bg);
+  box-shadow: var(--composer-thought-track-shadow);
+  transition: box-shadow 180ms ease-out;
+}
+
+/* 最高档让轨道缓慢呼吸，作为「已到顶」的第二重提示（第一重是满格填充）。 */
+.composer-thought-slider[data-top="true"] .composer-thought-track {
+  animation: var(--composer-thought-breathe) 1.9s ease-in-out infinite;
+}
+
+.composer-thought-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--composer-thought-canvas-opacity);
+  mix-blend-mode: var(--composer-thought-canvas-blend);
+  transition: opacity 140ms ease-out;
+  pointer-events: none;
+}
+
+/* 光斑贴着进度前沿，定位交给 --composer-thought-progress（由 JSX 写入百分比）。 */
+.composer-thought-flare {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: clamp(14px, var(--composer-thought-progress, 0%), calc(100% - 14px));
+  width: 78px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--composer-thought-flare-bg);
+  filter: blur(2px) saturate(1.12);
+  mix-blend-mode: screen;
+  transform: translate(-100%, -50%);
+  transition:
+    left 70ms linear,
+    filter 140ms ease-out;
+  pointer-events: none;
+}
+
+.composer-thought-flare::before,
+.composer-thought-flare::after {
+  content: "";
+  position: absolute;
+  inset: 50% auto auto 100%;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.composer-thought-flare::before {
+  width: 52px;
+  height: 1px;
+  background: var(--composer-thought-flare-streak-x);
+  box-shadow: var(--composer-thought-flare-streak-shadow-x);
+}
+
+.composer-thought-flare::after {
+  width: 1px;
+  height: 20px;
+  background: var(--composer-thought-flare-streak-y);
+  box-shadow: var(--composer-thought-flare-streak-shadow-y);
+}
+
+/* 拖拽时整条滑块变亮，代替上游靠 JS 记录的 dragging 状态。 */
+.composer-thought-slider:has(input:active) .composer-thought-canvas {
+  opacity: 1;
+  filter: saturate(1.45) brightness(1.28);
+}
+
+.composer-thought-slider:has(input:active) .composer-thought-flare {
+  filter: blur(1.5px) saturate(1.6) brightness(1.42);
+  transition: none;
+}
+
+@keyframes composer-thought-dark-breathe {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(196, 204, 255, 0.16),
+      0 3px 10px rgba(18, 25, 72, 0.4);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(220, 214, 255, 0.24),
+      0 0 21px rgba(111, 66, 255, 0.5);
+  }
+}
+
+@keyframes composer-thought-light-breathe {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 1px rgba(67, 124, 193, 0.16),
+      0 3px 10px rgba(48, 101, 165, 0.13);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.96), inset 0 0 0 1px rgba(31, 102, 190, 0.22),
+      0 0 19px rgba(31, 105, 201, 0.24);
+  }
 }
 
 /* 拖拽也是离散档位切换，禁用过渡会造成跳动；保留与点击一致的短过渡。 */
 .composer-thought-slider-thumb {
   background: var(--composer-thought-slider-thumb);
-  transition: left 120ms ease-out;
+  border: 1px solid var(--composer-thought-knob-border);
+  box-shadow: var(--composer-thought-knob-shadow);
+  transition:
+    left 120ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+.composer-thought-slider[data-top="true"] .composer-thought-slider-thumb,
+.composer-thought-slider:has(input:active) .composer-thought-slider-thumb {
+  box-shadow: var(--composer-thought-knob-shadow-top);
 }
 
 .composer-thought-slider-fill {
-  background: var(--color-success);
+  background: var(--composer-thought-fill-bg);
   transition: width 120ms ease-out;
 }
 
@@ -38,11 +277,11 @@
   border-radius: inherit;
   opacity: 0;
   transition: opacity 200ms ease-out;
-  /* 沿较短色相路径经过青色，保留高饱和度，避免中段发灰。 */
+  /* 沿较短色相路径经过蓝色，收在紫端，与主题的靛紫色系同族。 */
   background: linear-gradient(
     270deg in oklch shorter hue,
     var(--composer-thought-max-accent) 0%,
-    var(--color-success) 100%
+    var(--color-violet-500) 100%
   );
 }
 
@@ -59,6 +298,11 @@
   opacity: 1;
 }
 
+/* 折叠态的入口竖条与滑块共用同一套语义色，避免工具条上还是原来的成功绿。 */
+.composer-thought-meter-fill {
+  background: var(--composer-thought-max-accent);
+}
+
 .composer-thought-bubble {
   opacity: 0;
   animation: composer-thought-bubble-flow linear infinite;
@@ -69,10 +313,12 @@
     transform: translateX(104%);
     opacity: 0;
   }
+
   15%,
   80% {
     opacity: 0.4;
   }
+
   100% {
     transform: translateX(-4%);
     opacity: 0;
@@ -80,7 +326,7 @@
 }
 
 .composer-thought-slider-stop {
-  /* 中性灰在绿底上不清楚；已填充档位沿用滑块白色，不随深色主题变黑。 */
+  /* 中性灰在彩色底上不清楚；已填充档位沿用滑块白色，不随深色主题变黑。 */
   background: var(--color-foreground-subtlest);
   scale: 1;
   transition:
@@ -104,6 +350,10 @@
   }
 
   .composer-thought-bubble {
+    animation: none;
+  }
+
+  .composer-thought-slider[data-top="true"] .composer-thought-track {
     animation: none;
   }
 

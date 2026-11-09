@@ -503,10 +503,11 @@ async function selectThoughtLevelInScope(scope: string, thoughtLevel: string) {
   if (!selected) {
     throw new Error(`reasoning effort 菜单没有出现 ${thoughtLevel}`);
   }
+  // 档位文案 2026-11-08 起是语言无关标识（显示值＝请求值），两种写法都收。
   const expectedLabels: Record<string, string[]> = {
-    high: ["High", "高"],
-    low: ["Low", "低"],
-    max: ["Max", "最高"],
+    high: ["High", "高", "high"],
+    low: ["Low", "低", "low"],
+    max: ["Max", "最高", "max"],
   };
   await browser.waitUntil(
     async () => {

@@ -152,9 +152,8 @@ describe("虚拟项目升级顺序", () => {
     );
     await unpinned.waitForExist();
     // 取消置顶会把行移到任务区，需跟随新行 hover 才展示桌面归档操作。
+    // 交互调整：归档单击即生效，不再有二次确认态。
     await unpinned.moveTo();
-    await unpinned.$('button[data-testid^="task-archive-"]').click();
-    await $(`[data-archive-confirming-task-id="${CURRENT_IMPORTED_TASK_ID}"]`).waitForExist();
     await unpinned.$('button[data-testid^="task-archive-"]').click();
     await unpinned.waitForExist({ reverse: true });
     const db = new DatabaseSync(

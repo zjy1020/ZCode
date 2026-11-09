@@ -1,6 +1,6 @@
 import { RemoteTaskDeviceLabel } from "@/remote-connection/RemoteTaskDeviceLabel.js";
 /* eslint-disable max-lines -- task item 同时承载默认列表和 timeline 两行布局的共享交互，先保持动作链路集中避免归档/置顶回归。 */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   Archive,
   Clock,
@@ -67,8 +67,6 @@ interface TaskListItemProps {
   connectionOverlay?: "disconnected" | "reconnecting";
   onSelectTask: (taskId: string) => void;
   onArchiveTaskInline: (e: React.MouseEvent, taskId: string) => void;
-  onCancelArchiveConfirm: () => void;
-  isArchiveConfirming: boolean;
   onTogglePinTask: (taskId: string, pinned: boolean) => void;
   onStartRenameTask: (taskId: string, currentTitle: string) => void;
   onArchiveTask: (taskId: string) => void;
@@ -132,7 +130,6 @@ function areTaskListItemPropsEqual(left: TaskListItemProps, right: TaskListItemP
     left.isMobileActive === right.isMobileActive &&
     left.hoverEnabled === right.hoverEnabled &&
     left.connectionOverlay === right.connectionOverlay &&
-    left.isArchiveConfirming === right.isArchiveConfirming &&
     left.variant === right.variant &&
     left.showPinAction === right.showPinAction &&
     left.intl === right.intl &&
@@ -140,7 +137,6 @@ function areTaskListItemPropsEqual(left: TaskListItemProps, right: TaskListItemP
     left.actionsDisabledReason === right.actionsDisabledReason &&
     left.onSelectTask === right.onSelectTask &&
     left.onArchiveTaskInline === right.onArchiveTaskInline &&
-    left.onCancelArchiveConfirm === right.onCancelArchiveConfirm &&
     left.onTogglePinTask === right.onTogglePinTask &&
     left.onStartRenameTask === right.onStartRenameTask &&
     left.onArchiveTask === right.onArchiveTask &&
@@ -162,8 +158,6 @@ export const MemoTaskItem = memo(function TaskListItem({
   connectionOverlay,
   onSelectTask,
   onArchiveTaskInline,
-  onCancelArchiveConfirm,
-  isArchiveConfirming,
   onTogglePinTask,
   onOpenTaskContextMenu,
   onOpenFileTree,
@@ -196,36 +190,6 @@ export const MemoTaskItem = memo(function TaskListItem({
     ...(remoteSessionId ? { remoteSessionId } : {}),
     sessionId: task.taskId,
   });
-
-  useEffect(() => {
-    if (!isArchiveConfirming) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onCancelArchiveConfirm();
-      }
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-      if (target instanceof Node && itemRef.current?.contains(target)) {
-        return;
-      }
-      onCancelArchiveConfirm();
-    }
-
-    // 全局时间线和置顶列表的确认 key 含 workspacePath，Windows
-    // 反斜杠拼进 CSS selector 后会被当作转义，确认按钮因此被误判为条目外点击。
-    // 确认项直接使用自身 ref 判断事件边界，避免业务 key 与 CSS 语法耦合。
-    window.addEventListener("keydown", handleKeyDown, true);
-    window.addEventListener("pointerdown", handlePointerDown, true);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown, true);
-      window.removeEventListener("pointerdown", handlePointerDown, true);
-    };
-  }, [isArchiveConfirming, onCancelArchiveConfirm]);
 
   const splitPaneEntryEnabled = useV4SplitPaneEntry().enabled;
   const taskWorkspaceScope = useMemo(
@@ -360,8 +324,6 @@ export const MemoTaskItem = memo(function TaskListItem({
   }, []);
   const handleMouseLeave = useCallback(() => {
     setHoverActionsVisible(false);
-    // 归档二次确认依赖用户第二次点击确认；鼠标离开 row 时清理 hover 展示即可。
-    // 如果同步取消确认，用户移动鼠标稍微离开任务行后确认按钮会消失，导致二次确认无法稳定完成。
   }, []);
 
   const leadingIndicator = useMemo(
@@ -397,11 +359,7 @@ export const MemoTaskItem = memo(function TaskListItem({
     </Badge>
   ) : null;
   const archiveLabel = intl.formatMessage({
-    id: isArchiveConfirming
-      ? "common.confirm"
-      : isArchived
-        ? "taskList.unarchive"
-        : "taskList.archive",
+    id: isArchived ? "taskList.unarchive" : "taskList.archive",
   });
   const taskTitleWithChanges = formatTaskTitleWithChanges(taskTitle, taskChangeSummary, intl);
   const workspaceLabel = getPathLeaf(task.workspacePath);
@@ -433,50 +391,26 @@ export const MemoTaskItem = memo(function TaskListItem({
       </span>
     ) : null;
   const shouldRenderArchiveAction =
-    !workspaceActionsDisabled &&
-    !hasPendingInteraction &&
-    (shouldMountWorkspaceTaskActions || isArchiveConfirming);
-  const archiveActionVisibilityClassName = isArchiveConfirming ? "flex" : "flex";
+    !workspaceActionsDisabled && !hasPendingInteraction && shouldMountWorkspaceTaskActions;
   const archiveActionNode = shouldRenderArchiveAction ? (
-    /* 交互调整：任务进入“等待归档确认”后，右侧 hover 区不再显示归档按钮。
-       否则一个 item 同时出现“待确认状态”和“可归档操作”，视觉重心会互相打架。 */
-    <div className={cn("items-center gap-0.5", archiveActionVisibilityClassName)}>
-      {isArchiveConfirming ? (
-        <ControlHintTooltip title={archiveLabel} side="top" align="center">
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onClick={handleArchive}
-            data-testid={testId(TID_TASK_ARCHIVE, task.taskId)}
-            // Bugfix: 归档确认态是显式等待用户决策的状态，必须持续显示 destructive 按钮。
-            className={cn("shrink-0 border-destructive/20 px-2", archiveActionVisibilityClassName)}
-            aria-label={archiveLabel}
-          >
-            <span>{intl.formatMessage({ id: "common.confirm" })}</span>
-          </Button>
-        </ControlHintTooltip>
-      ) : (
-        // 普通归档态复用共享 action 的 hover 背景、尺寸和提示。
-        <TaskRowActionButton
-          label={archiveLabel}
-          onClick={handleArchive}
-          showTooltip
-          testId={testId(TID_TASK_ARCHIVE, task.taskId)}
-        >
-          {isRemoteTask ? (
-            // 本地和远端 task 混排时，统一 archive 图标无法提示操作会落在哪个 sqlite。
-            // 远端任务使用 cloud 语义图标，避免用户误把远端归档当成本地归档。
-            <CloudUpload className="h-3.5 w-3.5" />
-          ) : (
-            <Archive className="h-3.5 w-3.5" />
-          )}
-        </TaskRowActionButton>
-      )}
+    <div className="flex items-center gap-0.5">
+      {/* 交互调整：归档单击即生效，不再有“待确认”态，右侧只保留一个归档图标按钮。
+          以前这里会在确认态换成红色“确认”按钮，用户点一下就以为按钮坏了或者没点上。
+          普通归档态复用共享 action 的 hover 背景、尺寸和提示。 */}
+      <TaskRowActionButton
+        label={archiveLabel}
+        onClick={handleArchive}
+        showTooltip
+        testId={testId(TID_TASK_ARCHIVE, task.taskId)}
+      >
+        {isRemoteTask ? (
+          // 本地和远端 task 混排时，统一 archive 图标无法提示操作会落在哪个 sqlite。
+          // 远端任务使用 cloud 语义图标，避免用户误把远端归档当成本地归档。
+          <CloudUpload className="h-3.5 w-3.5" />
+        ) : (
+          <Archive className="h-3.5 w-3.5" />
+        )}
+      </TaskRowActionButton>
     </div>
   ) : null;
   // 原因：置顶任务常跨项目，查看文件必须保留独立入口；复用共享 action，避免点击选择任务。
@@ -542,7 +476,6 @@ export const MemoTaskItem = memo(function TaskListItem({
       data-testid={testId(TID_TASK_ITEM, task.taskId)}
       data-task-item-key={taskItemKey}
       data-mobile-active-task={isMobileActive ? "true" : undefined}
-      data-archive-confirming-task-id={isArchiveConfirming ? task.taskId : undefined}
       onClick={handleSelect}
       onContextMenu={handleContextMenu}
       draggable={canDragToWorkbench}
@@ -685,7 +618,7 @@ export const MemoTaskItem = memo(function TaskListItem({
                   data-task-row-metadata="true"
                   className={cn(
                     "flex items-center gap-1.5",
-                    isArchiveConfirming || shouldSuppressWorkspaceTaskMetadata
+                    shouldSuppressWorkspaceTaskMetadata
                       ? "hidden"
                       : undefined,
                   )}
@@ -762,7 +695,7 @@ export const MemoTaskItem = memo(function TaskListItem({
               {changeSummaryNode ? (
                 <span
                   className={cn(
-                    isArchiveConfirming || shouldSuppressWorkspaceTaskMetadata
+                    shouldSuppressWorkspaceTaskMetadata
                       ? "hidden"
                       : undefined,
                   )}
@@ -789,7 +722,7 @@ export const MemoTaskItem = memo(function TaskListItem({
                 data-task-row-metadata="true"
                 className={cn(
                   "mr-0.5 flex shrink-0 items-center gap-1 text-ui-sm text-foreground-subtle",
-                  isArchiveConfirming || shouldSuppressWorkspaceTaskMetadata ? "hidden" : undefined,
+                  shouldSuppressWorkspaceTaskMetadata ? "hidden" : undefined,
                 )}
               >
                 {isTaskCron ? (

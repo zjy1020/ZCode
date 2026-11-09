@@ -487,6 +487,7 @@ import {
   IProviderSettingsService,
 } from "./model-provider/providerFacadeServices.js";
 import { createProviderSettingsConnectivityTester } from "./model-provider/providerSettingsConnectivity.js";
+import { createProviderModelLister } from "./model-provider/providerModelCatalog.js";
 import {
   createProviderProvisioningSource,
   listProviderProvisioningCredentialKeys,
@@ -1633,6 +1634,9 @@ export function createLocalServices(options: {
         return providerConnectivityAgentService.testModelConnectivity(input);
       },
     }),
+    // 列模型不需要走 CLI 的模型执行链：baseUrl / apiType / apiKey 都能从配置视图直读，
+    // 所以这里直接复用本进程的 apiClient（带代理与 CA 设置），不发到 workspace。
+    listModels: createProviderModelLister({ apiClient }),
     disposeAccountSource: () => {
       disposeAccountProviderInvalidation();
       accountProviderRefreshErrorDispose();

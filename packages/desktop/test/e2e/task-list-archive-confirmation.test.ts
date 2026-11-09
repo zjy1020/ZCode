@@ -3,7 +3,6 @@ import {
   TID_CONVERSATION_SECTION,
   TID_TASK_ARCHIVE,
   TID_TASK_ITEM,
-  TID_V4_SESSION_PANE,
   testId,
 } from "@zcode/shared/test-ids";
 import { clearAppData } from "./helpers/desktop-app.js";
@@ -14,7 +13,6 @@ import {
 } from "./helpers/conversation-session.js";
 import { sel } from "./helpers/selectors.js";
 import {
-  V4_MAIN_PANE_ID,
   getV4PaneSnapshot,
   prepareV4ConversationE2E,
   sendV4Prompt,
@@ -22,13 +20,13 @@ import {
   waitForV4TimelineContaining,
 } from "./helpers/v4-conversation.js";
 
-describe("任务列表归档二次确认 E2E", () => {
+describe("任务列表归档单击生效 E2E", () => {
   after(async () => {
     await browser.electron.restoreAllMocks();
     await clearAppData();
   });
 
-  it("项目视图的任务区归档确认不会在按下时消失，完整点击后任务离开任务区", async function () {
+  it("项目视图的任务区点一下归档按钮即归档，任务离开任务区", async function () {
     this.timeout(150000);
 
     await ensureReadonlyToolFixtureFile();
@@ -55,25 +53,12 @@ describe("任务列表归档二次确认 E2E", () => {
     await hoverConversationTaskRow(taskId as string);
     await waitForArchiveButtonState(taskId as string, (state) => state.visible);
 
-    await $(sel(testId(TID_TASK_ARCHIVE, taskId as string))).click();
-    await waitForArchiveButtonState(taskId as string, (state) => state.confirming && state.visible);
-
-    await pointerDownArchiveConfirmButton(taskId as string);
-    await waitForArchiveButtonState(taskId as string, (state) => state.confirming && state.visible);
-
-    await movePointerAwayFromTaskRow();
-    await waitForArchiveButtonState(taskId as string, (state) => state.confirming && state.visible);
-
-    await clickBlankArea();
-    await waitForArchiveButtonState(
-      taskId as string,
-      (state) => !state.confirming && !state.exists,
-    );
-
-    await hoverConversationTaskRow(taskId as string);
+    // 回归：归档改成单击生效后，按下时按钮仍必须还在原位。
+    // hover 区如果被 pointerdown 抢先在 pointerdown 与 click 之间移除，
+    // Windows 上点击会落在已经 detach 的节点上，表现为“点了没反应”。
+    await pointerDownArchiveButton(taskId as string);
     await waitForArchiveButtonState(taskId as string, (state) => state.visible);
-    await $(sel(testId(TID_TASK_ARCHIVE, taskId as string))).click();
-    await waitForArchiveButtonState(taskId as string, (state) => state.confirming && state.visible);
+
     await $(sel(testId(TID_TASK_ARCHIVE, taskId as string))).click();
     await waitForConversationTaskRowAbsent(taskId as string);
   });
@@ -128,7 +113,6 @@ async function startConversationTaskDraft() {
 
 interface ArchiveButtonState {
   ariaLabel: string | null;
-  confirming: boolean;
   display: string | null;
   exists: boolean;
   text: string;
@@ -153,29 +137,16 @@ async function waitForConversationTaskRowAbsent(taskId: string) {
   });
 }
 
-async function movePointerAwayFromTaskRow() {
-  const sessionPane = await $(sel(testId(TID_V4_SESSION_PANE, V4_MAIN_PANE_ID)));
-  await sessionPane.waitForDisplayed({
-    timeout: 15000,
-    timeoutMsg: "v4 会话主区域没有显示，无法移动鼠标离开任务行",
-  });
-  await sessionPane.moveTo({ xOffset: 20, yOffset: 20 });
-}
-
-async function pointerDownArchiveConfirmButton(taskId: string) {
+async function pointerDownArchiveButton(taskId: string) {
   const dispatched = await browser.execute(
     (archiveTestId) => {
-      const button = Array.from(document.querySelectorAll<HTMLElement>("[data-testid]")).find(
-        (element) =>
-          element.dataset.testid === archiveTestId &&
-          element.closest("[data-archive-confirming-task-id]"),
-      );
+      const button = document.querySelector<HTMLElement>(`[data-testid="${archiveTestId}"]`);
       if (!button) {
         return false;
       }
 
-      // 回归 Windows 按住确认按钮的真实时序：pointerdown 发生时按钮必须继续存在，
-      // 直到后续 click 才能提交归档，不能被外部点击退出逻辑抢先清掉确认态。
+      // 回归 Windows 按住归档按钮的真实时序：pointerdown 发生时按钮必须继续存在，
+      // 直到后续 click 才能提交归档，不能被 hover 收起逻辑抢先移出 DOM。
       button.dispatchEvent(
         new PointerEvent("pointerdown", {
           bubbles: true,
@@ -189,21 +160,6 @@ async function pointerDownArchiveConfirmButton(taskId: string) {
     testId(TID_TASK_ARCHIVE, taskId),
   );
   expect(dispatched).toBe(true);
-}
-
-async function clickBlankArea() {
-  await browser.execute(() => {
-    // 修复原因：归档确认态由 window capture pointerdown 退出。
-    // 这里向 body 派发真实 PointerEvent，目标明确在任务行外，避免坐标点击误落到输入框或其他控件。
-    document.body.dispatchEvent(
-      new PointerEvent("pointerdown", {
-        bubbles: true,
-        pointerId: 1,
-        pointerType: "mouse",
-      }),
-    );
-    document.body.click();
-  });
 }
 
 async function waitForArchiveButtonState(
@@ -223,7 +179,6 @@ async function getArchiveButtonState(taskId: string): Promise<ArchiveButtonState
       if (!button) {
         return {
           ariaLabel: null,
-          confirming: Boolean(document.querySelector("[data-archive-confirming-task-id]")),
           display: null,
           exists: false,
           text: "",
@@ -235,7 +190,6 @@ async function getArchiveButtonState(taskId: string): Promise<ArchiveButtonState
       const rect = button.getBoundingClientRect();
       return {
         ariaLabel: button.getAttribute("aria-label"),
-        confirming: Boolean(button.closest("[data-archive-confirming-task-id]")),
         display: style.display,
         exists: true,
         text: button.textContent?.trim() ?? "",

@@ -344,6 +344,8 @@ export function SidePaneTabIcon({ tab }: { tab: WorkspaceSidePaneTab }) {
     return <BugIcon className="size-3.5" />;
   }
 
+  // 同 getSidePaneTabTitle：无 source 的 tab 必须在这里拦截，否则会落到末尾读
+  // `tab.source.type`。
   if (tab.type === "terminal" || tab.type === "bash-output") {
     return <SquareTerminalIcon className="size-3.5" />;
   }

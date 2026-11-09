@@ -329,6 +329,22 @@ export function PagePill({
 
 export type BarMode = "bar" | "ask" | "added";
 
+/**
+ * One line of the AI-edit draft: the ranges it applies to plus what the user wants done with them.
+ * The draft lives in the shell, not here: the bar is keyed by the selection, so selecting the next
+ * range remounts it and any state kept here would go with it.
+ */
+export interface AskLine {
+  /** Full anchors, as they go into the message. */
+  readonly at: readonly string[];
+  /** The same ranges as bare locators: what the viewer paints to keep them visible. */
+  readonly ranges: readonly string[];
+  readonly labels: readonly string[];
+  readonly question: string;
+  /** Quoted content of the first range, as it goes into the message. */
+  readonly quote?: string;
+}
+
 /** Keep the document's text selection when a press lands on the bar. */
 const keepSelection = (event: ReactMouseEvent) => {
   if (!(event.target as Element).closest("textarea")) event.preventDefault();
@@ -345,17 +361,24 @@ export function SelectionBar({
   mode,
   canAsk,
   copied,
+  multi,
+  draft,
+  question,
+  onQuestion: setQuestion,
   onAdd,
   onAsk,
   onCopy,
   onCancelAsk,
-  onSend,
+  onAddLine,
+  onRemoveLine,
+  onSendAll,
 }: {
   t: Strings;
   frame: RefObject<HTMLElement | null>;
   locate: Locate;
   /** A text selection (offers Copy) rather than a block, page or cell range (shows its label). */
   text: boolean;
+  /** Every range the action applies to, or the single current one. */
   label: string;
   quote: string;
   /** Use the short "Add" label (spreadsheets, where the range label takes the room). */
@@ -363,23 +386,46 @@ export function SelectionBar({
   mode: BarMode;
   canAsk: boolean;
   copied: boolean;
+  /** More than one range is selected (or the viewer can add more), so the hint shows. */
+  multi: boolean;
+  /** Lines already added to the AI-edit draft, oldest first. */
+  draft: readonly AskLine[];
+  /**
+   * What is typed in the AI-edit box. Held by the shell, not here: the bar is keyed by the
+   * selection, so selecting the next range remounts it mid-sentence.
+   */
+  question: string;
+  onQuestion(text: string): void;
   onAdd(): void;
   onAsk(): void;
   onCopy(): void;
   onCancelAsk(): void;
-  onSend(question: string): Promise<boolean>;
+  /** Add the typed request as a new draft line. Nothing is sent. */
+  onAddLine(question: string): void;
+  onRemoveLine(index: number): void;
+  /** Send every draft line (plus `pending`, when the box still has text) as one message. */
+  onSendAll(pending: string): Promise<boolean>;
 }) {
   const asking = mode === "ask";
   const ref = useFloating<HTMLDivElement>(frame, locate, {
     side: asking ? "bottom" : "top",
     dock: true,
   });
-  const [question, setQuestion] = useState("");
   const [sending, setSending] = useState(false);
-  const send = async () => {
-    if (!question.trim() || sending) return;
+  /**
+   * Enter adds a line instead of sending: the user builds up one request per range and sends them
+   * together, so the box keeps what is typed and the panel stays open.
+   */
+  const addLine = () => {
+    const value = question.trim();
+    if (!value) return;
+    onAddLine(value);
+    setQuestion("");
+  };
+  const sendAll = async () => {
+    if (sending || (!question.trim() && !draft.length)) return;
     setSending(true);
-    const ok = await onSend(question.trim());
+    const ok = await onSendAll(question.trim());
     setSending(false);
     if (ok) setQuestion("");
   };
@@ -396,6 +442,27 @@ export function SelectionBar({
           <span className="where">{label}</span>
           {quote ? <span className="q">“{quote}”</span> : null}
         </div>
+        <div className="draft" aria-label={t.askRanges}>
+          {draft.length ? (
+            draft.map((line, index) => (
+              <div className="line" key={`${index}:${line.at.join(",")}`}>
+                <span className="where">{line.labels.join(", ")}</span>
+                <span className="q">{line.question}</span>
+                <button
+                  type="button"
+                  className="btn icon dim"
+                  title={t.askRemoveLine}
+                  aria-label={t.askRemoveLine}
+                  onClick={() => onRemoveLine(index)}
+                >
+                  <Icon name="x" />
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="empty">{t.askDraftEmpty}</div>
+          )}
+        </div>
         <textarea
           autoFocus
           className="textarea"
@@ -405,9 +472,18 @@ export function SelectionBar({
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+            // ⌘/Ctrl+↵ sends everything that is waiting, so the user never has to select one more
+            // range just to reach the send button.
+            if (
+              event.key === "Enter" &&
+              (event.metaKey || event.ctrlKey) &&
+              !event.nativeEvent.isComposing
+            ) {
               event.preventDefault();
-              void send();
+              void sendAll();
+            } else if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              addLine();
             } else if (event.key === "Escape") {
               event.preventDefault();
               event.stopPropagation();
@@ -417,18 +493,28 @@ export function SelectionBar({
         />
         <div className="row">
           <span className="hint">
-            <kbd>↵</kbd> {t.sendKey}
+            <kbd>↵</kbd> {t.askLineKey}
+            <span className="sep">·</span>
+            <kbd>⌘/Ctrl+↵</kbd> {t.askSendKey}
           </span>
           <button type="button" className="btn sm" onClick={onCancelAsk}>
             {t.cancel}
           </button>
           <button
             type="button"
-            className="btn sm primary"
-            disabled={!question.trim() || sending}
-            onClick={() => void send()}
+            className="btn sm"
+            disabled={!question.trim()}
+            onClick={addLine}
           >
-            {t.send}
+            {t.askAddLine}
+          </button>
+          <button
+            type="button"
+            className="btn sm primary"
+            disabled={(!question.trim() && !draft.length) || sending}
+            onClick={() => void sendAll()}
+          >
+            {t.askSendAll(draft.length + (question.trim() ? 1 : 0))}
           </button>
         </div>
       </div>
@@ -484,6 +570,12 @@ export function SelectionBar({
           >
             <Icon name={copied ? "check" : "copy"} />
           </button>
+        </>
+      ) : null}
+      {multi && !text ? (
+        <>
+          <span className="vsep" />
+          <span className="hint">{t.askMultiHint}</span>
         </>
       ) : null}
     </div>

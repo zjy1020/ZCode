@@ -1,6 +1,5 @@
 import type { MarkdownSelectionTarget } from "@/lib/conversationSelectionReference.js";
 /* eslint-disable max-lines -- PreviewPane 内容路由同时承载文本、图片、媒体、Office、PDF 和 PPTX 渲染。 */
-import type { BundledTheme } from "shiki";
 import { useMemo, type Ref, type SyntheticEvent, type UIEventHandler } from "react";
 import type { FileBinaryPreview, FileMediaPreview, FileTextSlice } from "@zcode/shared";
 import { inferCodeLanguage } from "@/lib/codeViewer.js";
@@ -17,6 +16,8 @@ import { PdfPreviewContent } from "@/previewPanePdfContent.js";
 import { PptxPreviewContent } from "@/previewPanePptxContent.js";
 import { PatchFallbackContent } from "@/previewPanePatchFallbackContent.js";
 import { DiffViewer } from "@/components/ui/diff-viewer.js";
+import type { CodePreviewThemeName } from "@/lib/codePreviewPreferences.js";
+import { resolveCodePreviewTheme } from "@/lib/codePreviewPreferences.js";
 import type { PdfViewerLabels, PdfViewerSource } from "@/components/ui/pdf-viewer.js";
 import type { PptxPreviewViewerLabels } from "@/components/ui/pptx-preview-viewer.js";
 import type { CodeCommentPreview, CodeCommentRange } from "@/lib/codeCommentContext.js";
@@ -55,7 +56,7 @@ interface PreviewPaneContentProps {
   pptxReferenceNavigationReady: boolean;
   error: string | null;
   codePreviewSettings: CodePreviewSettings;
-  codeTheme: BundledTheme;
+  codeTheme: CodePreviewThemeName;
   resolvedTheme: "light" | "dark";
   /** 应用主题（store 耦合剥离）：透传给 markdown/mermaid 预览，缺省按 "system" 兜底。 */
   theme?: Theme;
@@ -190,8 +191,8 @@ export function PreviewPaneContent({
         newFile={multiFileDiffFiles.newFile}
         diffClassName="block"
         fontSizePx={codePreviewSettings.fontSizePx}
-        lightTheme={codePreviewSettings.lightTheme}
-        darkTheme={codePreviewSettings.darkTheme}
+        lightTheme={resolveCodePreviewTheme("light", codePreviewSettings)}
+        darkTheme={resolveCodePreviewTheme("dark", codePreviewSettings)}
         themeType={resolvedTheme}
       />
     );

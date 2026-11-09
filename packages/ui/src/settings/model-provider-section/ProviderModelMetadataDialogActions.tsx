@@ -86,6 +86,7 @@ export function ProviderModelMetadataDialogActions({
   onSave,
   onCancel,
   leadingAction,
+  saveTestId,
 }: {
   saveLabel: string;
   cancelLabel: string;
@@ -93,6 +94,8 @@ export function ProviderModelMetadataDialogActions({
   onSave: () => void;
   onCancel: () => void;
   leadingAction?: ReactNode;
+  /** 让调用方给主按钮挂稳定读点（同一位置会在「保存」与「添加 N 个模型」之间切换）。 */
+  saveTestId?: string;
 }) {
   return (
     <div data-model-settings-footer="true" className="flex items-center justify-between gap-2 pt-1">
@@ -101,7 +104,14 @@ export function ProviderModelMetadataDialogActions({
         <Button type="button" variant="ghost" size="lg" disabled={saving} onClick={onCancel}>
           {cancelLabel}
         </Button>
-        <Button type="button" variant="default" size="lg" disabled={saving} onClick={onSave}>
+        <Button
+          type="button"
+          variant="default"
+          size="lg"
+          disabled={saving}
+          onClick={onSave}
+          data-testid={saveTestId}
+        >
           {saving ? <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" /> : null}
           {saveLabel}
         </Button>

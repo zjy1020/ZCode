@@ -23,6 +23,9 @@ export { useReaddir } from "./useFileService.js";
 // 文件监视服务
 export { useWatchedReaddir } from "./useFileWatcherService.js";
 
+// 预览类高频内容的稳定化（连续写入时不重算高亮 / diff）
+export { PREVIEW_SETTLE_MS, useSettledValue } from "./useSettledValue.js";
+
 // 系统服务
 export { useSystemInfo, useIntranetProbe } from "./useSystemService.js";
 export { useWorkspaceHomePath } from "./useWorkspaceHomePath.js";

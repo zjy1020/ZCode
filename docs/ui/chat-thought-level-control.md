@@ -23,19 +23,29 @@
 
 模型配置提供可选档位及其顺序。控件只做展示投影，不凭 value 或 name 重新排序；下拉菜单、点击循环和 `Ctrl+T` 使用同一配置顺序，末项循环到首项。配置按低到高声明 minimal 在 low 前、ultra 在 max 后；开启是开关语义，不固定插入高与极高之间。
 
-| 原始 value                                                         | 中文 | 英文       |
-| ------------------------------------------------------------------ | ---- | ---------- |
-| disabled / false / no / none / nothink / no-think / no_think / off | 关闭 | Off        |
-| enable / enabled / on / true                                       | 开启 | On         |
-| minimal                                                            | 极低 | Minimal    |
-| low                                                                | 低   | Low        |
-| medium                                                             | 中   | Medium     |
-| high                                                               | 高   | High       |
-| xhigh / extra-high / extra_high                                    | 极高 | Extra high |
-| max                                                                | 最高 | Max        |
-| ultra                                                              | 极致 | Ultra      |
+| 原始 value                                                         | 显示文案 |
+| ------------------------------------------------------------------ | -------- |
+| disabled / false / no / none / nothink / no-think / no_think / off | off      |
+| enable / enabled / on / true                                       | on       |
+| minimal                                                            | minimal  |
+| low                                                                | low      |
+| medium                                                             | medium   |
+| high                                                               | high     |
+| xhigh / extra-high / extra_high                                    | xhigh    |
+| max                                                                | max      |
+| ultra                                                              | ultra    |
 
 文案匹配对 value 去首尾空格并转小写；选中与提交保留原始 value，不合并同名选项。extra-high／extra_high 为保留别名，不额外扩充其他拼写。
+
+### 档位名不做本地化（2026-11-08）
+
+**控件显示的字面量就是请求里发出去的值。** 用户反馈「最高」对不上供应商文档，改成标识后 `max` / `xhigh` / `high` 可以直接拿去搜索或填配置；中英文两套词条刻意写成同一个语言无关标识，不出现「最高 / Max」这类译名。
+
+- 只有**档位名**是标识；控件标题「推理强度」、tooltip「思考级别」、下拉占位「选择思考档位」与说明段的本地化照旧，不受此约定影响。
+- 词表来源仍是 `packages/ui/src/chat-input-toolbar/thoughtLevelLabels.ts` 的 value → 词条 id 映射，`getThoughtLevelLabel()` 行为不变；改的是 `chat.toolbar.thoughtLevel.value.*` 这九个词条的文案。
+- 改这九个词条等于改「显示值 ↔ 请求值」的对应关系，**不要再把它们翻译回去**。
+- 受影响的既有 E2E 断言表（`packages/desktop/test/e2e/helpers/upstream-provider.ts` 的 `UPSTREAM_THOUGHT_LEVEL_LABELS_BY_VALUE`、`conversation-session-subagent-runtime-catalog-reasoning.test.ts` 的 `acceptedLabels`、`conversation-session-built-in-subagent-model-overrides.test.ts` 的 `expectedLabels`）已同时接受旧译名与新标识，避免只改文案就把回归打红。
+- `offPeak.thought.*` 是闲时任务表单自己的一套词条，本轮未动；如要与控件统一，另行决定。
 
 light、shallow、balanced、default、normal、standard、deep、maximum、very-high、very_high 取消固定归类，和其他未知值一样显示来源提供的 name，仍可选择。不按 name 猜强度或是否关闭，不自动新增档位或改写配置。
 

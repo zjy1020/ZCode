@@ -23,6 +23,7 @@ import {
   type IProviderSettingsService,
   type ModelSelectionConfiguredDefaultSource,
   type ProviderSettingsConnectivityTester,
+  type ProviderSettingsModelLister,
 } from "./providerFacadeServices.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
@@ -31,6 +32,8 @@ const log = createServiceLogger("provider-runtime");
 export interface ProviderRuntimeOptions extends ProviderConfigRuntimeOptions {
   readonly accountSource?: RefreshableProviderSource<AccountProviderConfigSnapshot>;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
+  /** 拉取供应商上游模型列表的能力；未装配时设置页的「获取模型列表」会明确报缺。 */
+  readonly listModels?: ProviderSettingsModelLister;
 }
 
 export interface ProviderRuntimeDependencies {
@@ -38,6 +41,7 @@ export interface ProviderRuntimeDependencies {
   readonly accountSource?: RefreshableProviderSource<AccountProviderConfigSnapshot>;
   readonly disposeAccountSource?: () => void;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
+  readonly listModels?: ProviderSettingsModelLister;
   readonly modelSelectionConfiguredDefaultSource?: ModelSelectionConfiguredDefaultSource;
   readonly disposeModelSelectionConfiguredDefaultSource?: () => void;
 }
@@ -108,6 +112,7 @@ export class ProviderRuntime {
       settingsFacade,
       ensureReady,
       dependencies.testConnectivity,
+      dependencies.listModels,
     );
     this.#modelSelectionRuntime = createModelSelectionService(
       createNodeModelSelectionFacade(this.registryService),
@@ -202,7 +207,7 @@ function createSettingsMutationTarget(
 }
 
 export function createProviderRuntime(options: ProviderRuntimeOptions): ProviderRuntime {
-  const { accountSource, testConnectivity, ...configRuntimeOptions } = options;
+  const { accountSource, testConnectivity, listModels, ...configRuntimeOptions } = options;
   const configRuntime = createProviderConfigRuntime(configRuntimeOptions);
   const modelSelectionConfiguredDefaultSource = new NodeModelSelectionConfigRepository({
     personalRepository: configRuntime.personalRepository,
@@ -211,6 +216,7 @@ export function createProviderRuntime(options: ProviderRuntimeOptions): Provider
     configRuntime,
     accountSource,
     testConnectivity,
+    listModels,
     modelSelectionConfiguredDefaultSource,
     disposeModelSelectionConfiguredDefaultSource: () =>
       modelSelectionConfiguredDefaultSource.dispose(),

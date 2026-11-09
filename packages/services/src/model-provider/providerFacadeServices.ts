@@ -1,12 +1,14 @@
 import type { Event } from "@zcode/rpc";
 import { ServiceChannels } from "@zcode/shared";
 import {
+  isApiKeyAccess,
   type ModelConfigObject,
   type ModelId,
   type ModelSelection,
   type ModelSelectionFacade,
   type ModelSelectionView,
   type ModelSelectionViewInput,
+  type ProviderApiType,
   type ProviderConfigObject,
   type ProviderId,
   type ProviderSettingsFacade,
@@ -17,7 +19,7 @@ import {
   type SavePersonalModelDraftInput,
 } from "@zcode/provider";
 import { createServiceDescriptor } from "../descriptors.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type { ModelConnectivityResult, ProviderModelListResult } from "@zcode/shared";
 import { createServiceLogger } from "../logger/serviceLogger.js";
 
 export type {
@@ -68,6 +70,12 @@ export interface IProviderSettingsService {
   testModelConnectivity(
     input: ProviderSettingsConnectivityRequest,
   ): Promise<ModelConnectivityResult>;
+  /**
+   * 从供应商上游拉取可选模型列表，供「添加模型」时挑选用。
+   *
+   * 只读：不写任何配置，也不要求 Model 已经存在（正是为了知道该填什么才要列）。
+   */
+  listProviderModels(input: ProviderSettingsModelListRequest): Promise<ProviderModelListResult>;
 }
 
 export const IProviderSettingsService = createServiceDescriptor<IProviderSettingsService>(
@@ -92,6 +100,28 @@ export type ProviderSettingsConnectivityTester = (
   input: ProviderSettingsConnectivityTestInput,
 ) => Promise<ModelConnectivityResult>;
 
+/**
+ * lister 的输入：由服务层自己去 provider 视图里取「已经落盘生效」的连接参数，
+ * 因此**不需要** workspacePath，也不经过 CLI 的模型执行链。
+ */
+export interface ProviderSettingsModelListInput {
+  readonly providerId: ProviderId;
+  readonly baseUrl: string;
+  readonly apiType: ProviderApiType;
+  readonly apiKey?: string;
+  /** 配置里显式写的自定义头（部分反代网关要求），由实现最后覆盖上去。 */
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+/** RPC 面：只需要 providerId，其余从配置视图读。 */
+export interface ProviderSettingsModelListRequest {
+  readonly providerId: ProviderId;
+}
+
+export type ProviderSettingsModelLister = (
+  input: ProviderSettingsModelListInput,
+) => Promise<ProviderModelListResult>;
+
 export interface IModelSelectionService {
   readonly onDidChange: Event<ModelSelectionView>;
   getView(input?: ModelSelectionViewInput): Promise<ModelSelectionView>;
@@ -110,6 +140,7 @@ export function createProviderSettingsService(
   facade: ProviderSettingsFacade,
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
+  listModels?: ProviderSettingsModelLister,
 ): IProviderSettingsService {
   return {
     onDidChange: toEvent((listener) => facade.onDidChange(listener)),
@@ -204,6 +235,51 @@ export function createProviderSettingsService(
         ...(input.workspaceIdentity ? { workspaceIdentity: input.workspaceIdentity } : {}),
         providerId: input.providerId,
         modelId: input.modelId,
+      });
+    },
+    listProviderModels: async (input) => {
+      await ensureReady();
+      if (!listModels) {
+        throw new Error("当前 Environment 未装配供应商模型列表能力");
+      }
+      await facade.waitForProviderOperations(input.providerId);
+      const provider = facade
+        .getView()
+        .providers.find((item) => item.providerId === input.providerId);
+      // 与 testModelConnectivity 同样的口径：只消费配置视图里的公共资格，
+      // 不额外查 Key 权益、也不替代目标 Environment 的最终校验。
+      if (!provider || !provider.enabled) {
+        return {
+          success: false,
+          error: {
+            code: "provider-unavailable",
+            message: "This provider is currently unavailable for listing models.",
+          },
+        };
+      }
+      const baseUrl = provider.effectiveConfig.api?.baseUrl?.trim();
+      const apiType = provider.effectiveConfig.api?.type;
+      if (!baseUrl || !apiType) {
+        return {
+          success: false,
+          error: {
+            code: "provider-unavailable",
+            message: "This provider has no Base URL or API format configured yet.",
+          },
+        };
+      }
+      // apiKey 在配置视图里不脱敏（设置页的草稿脏检查也直接读它），
+      // 这里只把它交给注入的 lister，不落日志、不回传。
+      // 注意用 isApiKeyAccess 收窄：账号型 access（zhipu-account）根本没有 apiKey 字段。
+      const access = provider.effectiveConfig.access;
+      const apiKey = isApiKeyAccess(access) ? access.apiKey?.trim() : undefined;
+      const headers = provider.effectiveConfig.api?.headers;
+      return listModels({
+        providerId: input.providerId,
+        baseUrl,
+        apiType,
+        ...(apiKey ? { apiKey } : {}),
+        ...(headers ? { headers } : {}),
       });
     },
   };

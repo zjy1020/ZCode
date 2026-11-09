@@ -172,6 +172,11 @@ html[data-document-hidden] *::after {
   --color-background-alt: color-mix(in oklab, var(--color-neutral-100) 60%, transparent);
   --color-background-win-alt: var(--color-neutral-200);
   --color-brand: var(--color-sky-400);
+  /* 修复原因：全仓有 50+ 处 `ring-ring`，styles.css 里也有 `outline: … var(--color-ring) …`，
+   * 但 `--color-ring` 从来没有被定义过 —— 这些焦点环实际都不渲染（Tailwind 生成不出颜色、
+   * outline 整条声明作废）。这里补上定义并跟随品牌色：`--color-brand` 在四套主题里各自被覆盖，
+   * 外观扩展层写的内联变量也会一并传导过来。 */
+  --color-ring: var(--color-brand);
   --color-resize-handle: var(--color-sky-500);
   --color-icon-blue: var(--color-terminal-bright-blue);
   --color-icon-purple: var(--color-terminal-bright-magenta);

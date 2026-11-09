@@ -79,3 +79,31 @@ export type ModelConnectivityResult =
         readonly code?: "provider-unavailable" | "model-unavailable";
       };
     };
+
+/** 上游模型列表里的一个条目。 */
+export interface ProviderModelListItem {
+  readonly modelId: string;
+  /** 上游若给了人类可读名（Anthropic 的 `display_name`），原样带回。 */
+  readonly displayName?: string;
+}
+
+/**
+ * 从供应商上游拉取模型 id 列表的结果。
+ *
+ * 用独立的 `code` 而不是多一层联合：调用方（设置页）需要把
+ * `unsupported-api-format` 与 `missing-credentials` 当成「正常分支」呈现
+ * （提示用户手填），而不是当成错误弹红。其余失败一律走默认文案。
+ */
+export type ProviderModelListResult =
+  | { readonly success: true; readonly models: readonly ProviderModelListItem[] }
+  | {
+      readonly success: false;
+      readonly error: {
+        readonly message: string;
+        readonly code?:
+          | "provider-unavailable"
+          | "missing-credentials"
+          | "unsupported-api-format"
+          | "upstream-unreachable";
+      };
+    };

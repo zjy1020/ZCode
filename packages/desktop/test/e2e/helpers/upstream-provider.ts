@@ -54,11 +54,13 @@ export const UPSTREAM_SECONDARY_THOUGHT_LEVEL =
 const E2E_PROVIDER_REPLAY_API_KEY = "e2e-fixture-key";
 const MODEL_SELECTION_RECENT_KEY_PREFIX = "zcode-model-selection-recent-v1";
 const UPSTREAM_THOUGHT_LEVEL_MAX_ATTEMPTS = 8;
+// 档位文案在 2026-11-08 改成了语言无关的标识（off/high/xhigh/max…），显示值＝请求值。
+// 这里同时接受旧译名与新标识，避免只改 UI 文案就把这些 E2E 全部打红。
 const UPSTREAM_THOUGHT_LEVEL_LABELS_BY_VALUE: Record<string, string[]> = {
-  high: ["High", "高"],
-  disabled: ["Disabled", "关闭"],
-  enabled: ["Enabled", "开启"],
-  max: ["Max", "最高"],
+  high: ["High", "高", "high"],
+  disabled: ["Disabled", "关闭", "off", "disabled"],
+  enabled: ["Enabled", "开启", "on", "enabled"],
+  max: ["Max", "最高", "max"],
 };
 export const UPSTREAM_MODEL_VALUES = getUpstreamModelValues(UPSTREAM_MODEL);
 

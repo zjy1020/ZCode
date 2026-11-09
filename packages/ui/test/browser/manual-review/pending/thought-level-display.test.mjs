@@ -74,34 +74,21 @@ for (const width of [390, 1200]) {
           );
           assert.equal(await page.getByTestId("value").textContent(), value);
         };
-        const label =
-          locale === "zh-CN"
-            ? [
-                "关闭",
-                "极低",
-                "低",
-                "中",
-                "高",
-                "极高",
-                "最高",
-                "极致",
-                "极高",
-                "极高",
-                "Provider default",
-              ]
-            : [
-                "Off",
-                "Minimal",
-                "Low",
-                "Medium",
-                "High",
-                "Extra high",
-                "Max",
-                "Ultra",
-                "Extra high",
-                "Extra high",
-                "Provider default",
-              ];
+        // 档位文案自 2026-11-08 起是语言无关标识：显示值＝请求值，中英文同一份。
+        // 末项不是标识，是 fixture 里 provider 自己给的 name（未知值走通用回退）。
+        const label = [
+          "off",
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra",
+          "xhigh",
+          "xhigh",
+          "Provider default",
+        ];
         try {
           await page.goto(`${origin}fixture?${new URLSearchParams({ theme, locale })}`);
           const trigger = page.getByTestId("select").getByRole("combobox");

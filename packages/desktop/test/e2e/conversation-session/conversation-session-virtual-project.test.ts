@@ -916,12 +916,8 @@ describe("虚拟项目", () => {
       await $('//*[normalize-space(.)="E2E_VP18_READY" and not(*)]').waitForDisplayed();
       await taskRow.moveTo();
       const archive = taskRow.$(`[data-testid="${testId(TID_TASK_ARCHIVE, remoteTaskId)}"]`);
+      // 交互调整：归档单击即生效，不再有二次确认态。
       await archive.click();
-      if (
-        (await taskRow.isExisting()) &&
-        (await taskRow.getAttribute("data-archive-confirming-task-id")) === remoteTaskId
-      )
-        await archive.click();
       await taskRow.waitForExist({ reverse: true });
       await $('//*[normalize-space(.)="E2E_VP18_READY" and not(*)]').waitForDisplayed({
         reverse: true,

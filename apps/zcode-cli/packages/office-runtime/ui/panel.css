@@ -516,6 +516,42 @@ button.doctitle:hover,
   white-space: nowrap;
   overflow: hidden;
 }
+/* AI-edit draft: one row per range, added with ↵ before anything is sent. */
+.ask .draft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 132px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 6px;
+}
+.ask .draft .line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+.ask .draft .line .where {
+  flex: none;
+  max-width: 45%;
+  padding: 0;
+  color: var(--fg-subtle);
+}
+.ask .draft .line .q {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ask .draft .empty {
+  font-size: var(--text-sm);
+  color: var(--fg-subtlest);
+}
 
 /* Agent callout and chips. */
 .callout {
@@ -577,6 +613,43 @@ button.doctitle:hover,
   padding: 0 12px;
   color: var(--danger);
   pointer-events: none;
+}
+
+/*
+ * The AI-edit draft when nothing is selected any more: the bar is gone, the lines are not. Without
+ * this the only way back to "send" would be to select one more range.
+ */
+.ask-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100% - 24px));
+  padding: 6px 8px 6px 12px;
+  border-radius: 10px;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-float);
+  font-size: var(--text-sm);
+}
+.ask-dock .count {
+  flex: none;
+  font-weight: 500;
+}
+.ask-dock .hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-subtlest);
+}
+.ask .row .hint .sep {
+  padding: 0 4px;
+  color: var(--fg-subtlest);
 }
 
 /* Menus: ZCode dropdown. */

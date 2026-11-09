@@ -1,10 +1,11 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ScrollFadeViewport } from "@/components/ui/scroll-fade-viewport.js";
 import type { ComposerPlanGroup } from "@/lib/composerPlanGroups.js";
 import type { ModelSelectGroup } from "@/ModelConfigSelect.js";
 import { isNoThoughtLevel } from "@/chat-input-toolbar/thoughtLevelOptions.js";
 import { ComposerEffortHeading } from "@/chat-input-toolbar/ComposerEffortHeading.js";
 import { ComposerProviderMenu } from "@/chat-input-toolbar/ComposerProviderMenu.js";
+import { ThoughtSliderParticles } from "@/chat-input-toolbar/ThoughtSliderParticles.js";
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -91,7 +92,8 @@ export function ComposerThoughtIndicator({
         className="relative hidden h-4 w-1 shrink-0 overflow-hidden rounded-full bg-foreground/10 group-data-[composer-compact=true]/combined:block"
       >
         <span
-          className="composer-thought-meter-fill absolute bottom-0 left-0 w-full rounded-full bg-success"
+          // 配色与展开态的滑块同源（见 composer-thought-slider.css），不再单独用成功绿。
+          className="composer-thought-meter-fill absolute bottom-0 left-0 w-full rounded-full"
           style={{ height: `${progress}%` }}
         />
       </span>
@@ -226,6 +228,14 @@ export function ComposerModelMenu({
                 <div
                   className="composer-thought-slider relative h-8 w-full rounded-full"
                   data-disabled={sliderDisabled}
+                  // 最高档让轨道缓慢呼吸；未填充时不算到顶，否则只表示「位置恰好落在末格」。
+                  data-top={sliderFilled && currentIndex === options.levels.length - 1}
+                  // 光斑与星尘的进度前沿，和 data-progress 同源，避免两处各算一遍。
+                  style={
+                    {
+                      "--composer-thought-progress": `${sliderFilled ? sliderProgress : 0}%`,
+                    } as CSSProperties
+                  }
                 >
                   <div
                     // 模型或档位目录变化时只重置视觉层，避免跨模型补间，同时保留 input 焦点。
@@ -240,9 +250,10 @@ export function ComposerModelMenu({
                     <div
                       data-testid="composer-thought-track"
                       data-progress={sliderFilled ? sliderProgress : 0}
-                      className="absolute inset-x-0 top-1 h-6 overflow-hidden rounded-full bg-foreground/10"
+                      // 轨道占满 28px，与 28px 的圆钮同高；两端各留 2px 让圆钮不外溢视觉边界。
+                      className="composer-thought-track absolute inset-x-0 top-0.5 h-7 overflow-hidden rounded-full"
                     >
-                      {/* 外层 border 会包住绿色填充；描边放到底层，让选中区域完全覆盖它。 */}
+                      {/* 外层描边会盖住填充色；描边放到底层，让选中区域完全覆盖它。 */}
                       <div className="absolute inset-0 rounded-full border border-foreground/10" />
                       <div
                         className="composer-thought-slider-fill absolute inset-y-0 left-0 overflow-hidden rounded-full"
@@ -282,6 +293,12 @@ export function ComposerModelMenu({
                           </div>
                         ) : null}
                       </div>
+                      {/* 星尘与光斑都放在轨道内部，靠 overflow-hidden 跟随圆角裁剪；圆钮留在外层不被裁。 */}
+                      <ThoughtSliderParticles
+                        progress={sliderFilled ? sliderProgress : 0}
+                        enabled={!sliderDisabled}
+                      />
+                      <span className="composer-thought-flare" />
                     </div>
                     <div className="absolute inset-x-3.5 inset-y-0 flex items-center justify-between">
                       {options.levels.map((level, index) => (
@@ -297,7 +314,8 @@ export function ComposerModelMenu({
                       ))}
                     </div>
                     <div
-                      className="composer-thought-slider-thumb absolute top-0.5 size-7 rounded-full shadow-sm"
+                      // 阴影与描边统一由 composer-thought-slider.css 给，避免与 Tailwind shadow 工具类抢同一条声明。
+                      className="composer-thought-slider-thumb absolute top-0.5 size-7 rounded-full"
                       style={{ left: `calc((100% - 28px) * ${sliderProgress / 100})` }}
                     />
                   </div>

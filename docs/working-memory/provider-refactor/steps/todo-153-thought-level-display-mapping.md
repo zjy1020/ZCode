@@ -83,3 +83,25 @@
 - 当前 Linux 使用已有隔离库和中文字体，通过 `LD_LIBRARY_PATH`、`FONTCONFIG_FILE` 提供，不修改产品运行环境。首轮中文 fixture 误用 locale prop、键盘早于 Radix 聚焦的验证问题已修正；截图等待入场动画结束后重取，中文字体和四类尺寸／主题代表图已目视检查。
 - `pnpm typecheck`、`pnpm lint`、`pnpm architecture:check --changed` 通过；lint 47 条既有警告、0 错误。格式、链接和 diff 检查通过。
 - 未运行完整 Electron、手机远控重连或真实供应商请求；本次没有改动这些链路。浏览器 evidence 不冒充上述验证或正式桌面 E2E 准入。
+
+## 后续变更：档位名改回标识（2026-11-08）
+
+> 本条覆盖上一节「已确认展示映射」的中英文译名列；其余裁决（顺序来源、未知值回退、保留 value、阶梯条口径）不变。
+
+用户在使用中反馈：模型菜单里显示「最高」看不出对应哪个档位，希望直接显示 `max`、`high`、`xhigh` 这样的英文标识，方便对照供应商文档。
+
+**新契约：控件显示的字面量＝请求里发出去的值。** 中英文两套词条写成同一个语言无关标识，不再有译名：
+
+| 原始 value                                                         | 显示文案 |
+| ------------------------------------------------------------------ | -------- |
+| disabled / false / no / none / nothink / no-think / no_think / off | off      |
+| enable / enabled / on / true                                       | on       |
+| minimal / low / medium / high                                      | 同名     |
+| xhigh / extra-high / extra_high                                    | xhigh    |
+| max / ultra                                                        | 同名     |
+
+- 只改 `chat.toolbar.thoughtLevel.value.*` 九个词条的文案；value → 词条 id 的映射表、`getThoughtLevelLabel()`、顺序、未知值回退、原始 value 提交与请求映射全部不动。
+- 控件标题、tooltip、下拉占位与说明段的本地化照旧，**只有档位名是标识**。
+- 同步放宽了三处既有 E2E 断言表，让它们同时接受旧译名与新标识：`helpers/upstream-provider.ts` 的 `UPSTREAM_THOUGHT_LEVEL_LABELS_BY_VALUE`、`conversation-session-subagent-runtime-catalog-reasoning.test.ts` 的 `acceptedLabels`（补 `xhigh`）、`conversation-session-built-in-subagent-model-overrides.test.ts` 的 `expectedLabels`。其余七处 `getUpstreamThoughtLevelLabels()` 调用方本就形如 `[thoughtLevel, ...labels]`，天然接受标识，无需改。
+- 闲时任务表单的 `offPeak.thought.*` 是另一套词条，本轮未动。
+- 验证：`pnpm run typecheck` EXITCODE=0、`pnpm run lint` 84 warnings/0 errors（无新增）、locale 键无重复。完整 Electron E2E 仍未重跑（本机环境跑不了），只做代码级同步。

@@ -12,6 +12,7 @@ import {
   resolveModelProviderFamilySpecByProviderId,
   type ModelConnectivityResult,
   type OAuthProviderId,
+  type ProviderModelListResult,
 } from "@zcode/shared";
 import {
   getProviderFormApiKeyManagementUrl,
@@ -246,6 +247,7 @@ export function ModelProviderSectionDetail({
   onDelete,
   onReorderProviderModels,
   onTestModel,
+  onListProviderModels,
   onCodingPlanLogin,
   onRetryCodingPlan,
   onCodingPlanDisconnect,
@@ -285,6 +287,11 @@ export function ModelProviderSectionDetail({
   onDelete: (provider: ProviderSettingsFormProvider) => Promise<void>;
   onReorderProviderModels?: (providerId: string, modelIds: string[]) => Promise<void>;
   onTestModel: (providerId: string, modelId: string) => Promise<ModelConnectivityResult>;
+  /**
+   * 拉取上游模型列表。只有自定义供应商会传：预置/套餐供应商的模型来自 CDN 与套餐，
+   * 没有可查询的上游模型端点，传进来反而会让用户点了拿到一个必然失败的结果。
+   */
+  onListProviderModels?: (providerId: string) => Promise<ProviderModelListResult>;
   onRetryCodingPlan?: () => void | Promise<void>;
   onCodingPlanLogin: (
     presetId: BuiltinModelProviderId,
@@ -855,6 +862,7 @@ export function ModelProviderSectionDetail({
           : undefined
       }
       onTestModel={onTestModel}
+      onListProviderModels={onListProviderModels}
       presetApiKeyUrl={customApiKeyUrl}
       readOnlyEndpoints={false}
       nameEditable

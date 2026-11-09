@@ -2,11 +2,11 @@
 
 import type { CSSProperties, HTMLAttributes } from "react";
 import { memo, useMemo } from "react";
-import type { BundledTheme } from "shiki";
 import type { FileContents, FileDiffOptions } from "@pierre/diffs";
 import { MultiFileDiff, PatchDiff } from "@pierre/diffs/react";
 
 import { cn } from "@/components/lib/utils.js";
+import type { CodePreviewThemeName } from "@/lib/codePreviewPreferences.js";
 import { DIFFS_PREFERRED_HIGHLIGHTER } from "@/lib/diffsHighlighterEngine.js";
 
 type DiffViewerStyle = CSSProperties & {
@@ -37,8 +37,8 @@ export type DiffViewerProps = Omit<HTMLAttributes<HTMLDivElement>, "children"> &
     disableWorkerPool?: boolean;
     diffClassName?: string;
     fontSizePx?: number;
-    lightTheme?: BundledTheme;
-    darkTheme?: BundledTheme;
+    lightTheme?: CodePreviewThemeName;
+    darkTheme?: CodePreviewThemeName;
     themeType?: "light" | "dark";
     selectedLines?: DiffViewerSelectedLineRange | null;
   };

@@ -9,6 +9,7 @@ import {
   shouldUseSyntaxHighlighting,
   type TokenizedCode,
 } from "@/lib/shikiHighlighter.js";
+import { PREVIEW_SETTLE_MS, useSettledValue } from "@/hooks/useSettledValue.js";
 import { logger } from "@/logger.js";
 import type { CodePreviewSettings } from "@/store/index.js";
 
@@ -38,11 +39,14 @@ function useHighlightedLightweightDiffTokens({
   theme: BundledTheme;
 }) {
   const [tokenizedCode, setTokenizedCode] = useState<TokenizedCode | null>(null);
+  // 文件正在被写入时，这段 code 每几百毫秒换一次；不合并的话每次都会重新触发一趟
+  // 主线程 Shiki 词法化（大文件是百毫秒级），界面就会被连续占满。
+  const settledCode = useSettledValue(code, PREVIEW_SETTLE_MS);
 
   useEffect(() => {
     setTokenizedCode(null);
 
-    if (!code || code.length > HIGHLIGHTED_LIGHTWEIGHT_DIFF_MAX_CHARS) {
+    if (!settledCode || settledCode.length > HIGHLIGHTED_LIGHTWEIGHT_DIFF_MAX_CHARS) {
       return;
     }
 
@@ -52,14 +56,14 @@ function useHighlightedLightweightDiffTokens({
 
     if (shouldHighlight) {
       logger.debug("[HighlightedLightweightDiffPreview] 启动异步 diff 高亮", {
-        chars: code.length,
+        chars: settledCode.length,
         language,
         path,
         theme,
       });
     }
 
-    const tokenized = highlightCode(code, language, theme, (result) => {
+    const tokenized = highlightCode(settledCode, language, theme, (result) => {
       if (cancelled) {
         return;
       }
@@ -83,7 +87,8 @@ function useHighlightedLightweightDiffTokens({
     return () => {
       cancelled = true;
     };
-  }, [code, language, path, theme]);
+    // settledCode 已内建延迟：只有内容停下来才会变，因此这里不再需要额外去抖。
+  }, [language, path, settledCode, theme]);
 
   return tokenizedCode;
 }

@@ -23,6 +23,7 @@ import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { usePptxFileWatch } from "@/hooks/usePptxFileWatch.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { usePdfViewerLabels, usePptxViewerLabels } from "@/hooks/usePreviewViewerLabels.js";
+import { resolveCodePreviewTheme } from "@/lib/codePreviewPreferences.js";
 import {
   FILE_VIEWER_MAX_TEXT_BYTES,
   createDiffSourceFilePreviewSource,
@@ -586,8 +587,7 @@ export function PreviewPane({
   });
   const previousRenderHeavyContentRef = useRef(renderHeavyContent);
   const resolvedTheme = resolveTheme(theme);
-  const codeTheme =
-    resolvedTheme === "dark" ? codePreviewSettings.darkTheme : codePreviewSettings.lightTheme;
+  const codeTheme = resolveCodePreviewTheme(resolvedTheme, codePreviewSettings);
   const imageSource = useMemo(() => resolvePreviewPaneImageSource(source), [source]);
   const mediaSource = useMemo(() => resolvePreviewPaneMediaSource(source), [source]);
   const pdfSource = useMemo(() => resolvePreviewPanePdfSource(source), [source]);

@@ -1,19 +1,21 @@
-import type { BundledLanguage, BundledTheme } from "shiki";
+import type { BundledLanguage } from "shiki";
 import type { Ref, UIEventHandler } from "react";
 import { cn } from "@/components/lib/utils.js";
 import { MermaidBlock } from "@/components/ai-elements/mermaid-block.js";
 import { CodeViewer } from "@/components/ui/code-viewer.js";
 import type { CodeCommentLabels } from "@/components/ui/code-viewer.js";
 import type { CodePreviewSettings } from "@/store/index.js";
+import type { CodePreviewThemeName } from "@/lib/codePreviewPreferences.js";
 import type { CodeCommentPreview, CodeCommentRange } from "@/lib/codeCommentContext.js";
 import { isMermaidLanguage } from "@/lib/mermaidLanguage.js";
+import { useSettledValue } from "@/hooks/useSettledValue.js";
 import type { Theme } from "@/useTheme.js";
 
 interface CodeContentProps {
   code: string;
   language: BundledLanguage;
   codePreviewSettings: CodePreviewSettings;
-  codeTheme: BundledTheme;
+  codeTheme: CodePreviewThemeName;
   /** 应用主题（store 耦合剥离）：透传给 Mermaid 预览，缺省按 "system" 兜底。 */
   theme?: Theme;
   wrapLongLines: boolean;
@@ -61,6 +63,11 @@ export function CodeContent({
   scrollContainerRef,
   className,
 }: CodeContentProps) {
+  // 预览面板里的文件可能正在被写入 / 被 Agent 反复改写：内容一变，@pierre/diffs 就要重建
+  // 整份 Shadow DOM（千行级）并重新词法化。只渲染「停下之后」的那一版，避免连续重算把
+  // 主线程占满；首次打开依旧立刻产出内容，不会多等一个窗口。
+  const settledCode = useSettledValue(code);
+
   if (isMermaidLanguage(language)) {
     return (
       <div
@@ -69,7 +76,7 @@ export function CodeContent({
         onScroll={onScroll}
       >
         <MermaidBlock
-          code={code}
+          code={settledCode}
           theme={theme}
           className="min-h-full rounded-xl border border-border"
         />
@@ -79,7 +86,7 @@ export function CodeContent({
 
   return (
     <CodeViewer
-      code={code}
+      code={settledCode}
       language={language}
       showLineNumbers={codePreviewSettings.showLineNumbers}
       theme={codeTheme}

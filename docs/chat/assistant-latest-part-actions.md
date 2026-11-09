@@ -33,7 +33,7 @@ cold message.info.time.created ───────┤
                                       |
                     completed assistant action toolbar
                          /                         \
-          desktop hover/focus          mobile /remote 常显
+          desktop 常驻显示               mobile /remote 常显（无 Tooltip）
 ```
 
 live continuous 直接使用 CLI 事件时间；cold hydration 必须把 transcript assistant message 的
@@ -61,9 +61,14 @@ desktop / mobile assistant action toolbar
 
 - UI 复用 `MessageAction` 的紧凑 ghost/icon 样式和语义色 token；选中态保留清晰背景反馈。
 - 使用 `aria-pressed`、本地化 label 和可见 focus 状态。
-- 桌面端随 assistant turn hover/focus 显示；手机 `/remote` 没有 hover，动作区直接可见且
-  不用 Tooltip 包裹按钮，避免触屏首次 tap 被 hover/portal 吞掉。
-- 时间跟随动作区一起显隐，排列在所有可用动作之后；它是只读元数据，不增加可点击区域。
+- **动作区常驻显示（2026-11-08 起，桌面端与手机 `/remote` 一致）**：此前桌面端是 hover/focus
+  才显现，用户反馈「鼠标放上去才出现等于找不到」，改为常驻。手机 `/remote` 本来就常显。
+  手机仍不用 Tooltip 包裹按钮，避免触屏首次 tap 被 hover/portal 吞掉。
+- **时间戳常驻显示，且渲染在动作区之外**：它曾挂在带 `opacity-0 group-hover:…` 的
+  `MessageActions` 内部 —— opacity 是合成组，子元素逃不掉，时间跟着一起淡出等于「平时看不到
+  时间」。现在时间是同级兄弟节点，排列在所有可用动作之后（用户消息行排在动作之前、右对齐）；
+  它是只读元数据，不增加可点击区域。
+- 用户消息行（`SingleUserInputRowView`）同样常驻显示 copy/编辑动作与时间。
 - 点按选中动画尊重 `prefers-reduced-motion`。
 
 实现入口：`ConversationRowView.tsx` 和共享 test id。

@@ -457,11 +457,12 @@ async function selectThoughtLevelInScope(scope: string, thoughtLevel: string) {
 }
 
 async function assertCurrentThoughtLabel(scope: string, thoughtLevel: string) {
+  // 档位文案 2026-11-08 起是语言无关标识（显示值＝请求值），两种写法都收。
   const acceptedLabels: Record<string, string[]> = {
     low: ["low", "低"],
     medium: ["medium", "中"],
     high: ["high", "高"],
-    xhigh: ["extra high", "极高"],
+    xhigh: ["xhigh", "extra high", "极高"],
   };
   await browser.waitUntil(
     async () => {

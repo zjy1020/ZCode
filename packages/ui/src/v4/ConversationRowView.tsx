@@ -940,7 +940,9 @@ const SingleUserInputRowView = memo(function SingleUserInputRowView({
   editWorkspaceRewindAvailability?: EditWorkspaceRewindAvailability;
   status?: string;
 }) {
-  const { intl } = useZCodeIntl();
+  const { intl, locale } = useZCodeIntl();
+  // 用户消息也显示时刻，并且常显：与助手侧共用同一个格式化器（自带按天/按语言的缓存）。
+  const userTimeLabel = formatMessageTimeLabel(row.createdAt, locale, intl);
   // 引擎尾注折叠：正文只到 epilogueStart，
   // 之后的引擎文本折进气泡底部的披露。提示词上下文解析也只看正文——尾注里没有用户引用。
   const { body: bodyText, epilogue } = splitUserInputEpilogue(row.text, row.epilogueStart);
@@ -1426,30 +1428,36 @@ const SingleUserInputRowView = memo(function SingleUserInputRowView({
       ) : null}
       {/* Bugfix：手机远控没有 hover，v4 迁移时漏掉了旧 UserMessage 的常显分支，
           导致复制和编辑入口不可发现；远控直接显示，桌面端继续通过 hover/focus 降噪。 */}
-      <MessageActions
-        className={cn(
-          "mt-1",
-          context.compactForRemoteControl
-            ? "opacity-100"
-            : "opacity-0 transition-opacity group-hover/user-row:opacity-100 focus-within:opacity-100",
-        )}
-      >
-        <CopyRowAction
-          text={row.text}
-          rowId={row.rowId}
-          label={intl.formatMessage({ id: "chat.message.copy" })}
-        />
-        {onEdit && row.entityId ? (
-          <MessageAction
-            label={intl.formatMessage({ id: "chat.message.edit" })}
-            tooltip={intl.formatMessage({ id: "chat.message.edit" })}
-            data-testid={testId(TID_V4_EDIT, String(row.rowId))}
-            onClick={handleOpenEdit}
+      <div className="mt-1 flex items-center justify-end gap-1">
+        {/* 时刻常显。操作按钮（复制/编辑）继续悬停显现，但时间戳不是操作入口，
+            藏在 hover 里等于「没有时间显示」。放在按钮左侧，与气泡右对齐成一组。 */}
+        {userTimeLabel ? (
+          <span
+            className="select-none text-ui-sm text-foreground-subtlest"
+            data-v4-message-time="true"
           >
-            <PencilIcon className="size-3.5" />
-          </MessageAction>
+            {userTimeLabel}
+          </span>
         ) : null}
-      </MessageActions>
+        {/* 操作按钮与时间戳一样常驻显示（2026-11-08 用户反馈：悬停才出现等于找不到）。 */}
+        <MessageActions>
+          <CopyRowAction
+            text={row.text}
+            rowId={row.rowId}
+            label={intl.formatMessage({ id: "chat.message.copy" })}
+          />
+          {onEdit && row.entityId ? (
+            <MessageAction
+              label={intl.formatMessage({ id: "chat.message.edit" })}
+              tooltip={intl.formatMessage({ id: "chat.message.edit" })}
+              data-testid={testId(TID_V4_EDIT, String(row.rowId))}
+              onClick={handleOpenEdit}
+            >
+              <PencilIcon className="size-3.5" />
+            </MessageAction>
+          ) : null}
+        </MessageActions>
+      </div>
     </RowShell>
   );
 });
@@ -1505,6 +1513,7 @@ export const ConversationAssistantTextActions = memo(function ConversationAssist
   onFork?: (target: ConversationRowTarget) => void;
   onRetry?: (target: ConversationRowTarget) => void;
   onFeedbackChange?: AssistantFeedbackHandler;
+  /** 外层容器（决定外边距与排列），时间戳也跟着它走。 */
   className?: string;
 }) {
   const { intl, locale } = useZCodeIntl();
@@ -1579,76 +1588,86 @@ export const ConversationAssistantTextActions = memo(function ConversationAssist
     }
   }, [entityId, onFork, rowId]);
   return (
-    <MessageActions className={cn(className, "has-[[data-bot-group-delivery]]:opacity-100")}>
-      <CopyRowAction
-        text={text}
-        rowId={rowId}
-        label={copyLabel}
-        tooltip={resolveTooltip(copyLabel)}
-      />
-      {entityId && onFeedbackChange ? (
-        <>
-          <MessageAction
-            aria-label={likeLabel}
-            aria-pressed={localFeedback === "like"}
-            label={likeLabel}
-            tooltip={resolveTooltip(likeLabel)}
-            data-testid={testId(TID_V4_FEEDBACK_LIKE, String(rowId))}
-            className={localFeedback === "like" ? "!bg-success/10" : undefined}
-            onClick={() => handleFeedback("like")}
-          >
-            <span
-              className={cn(
-                "relative inline-flex",
-                localFeedback === "like" && "zcode-reaction-burst",
-              )}
+    <div className={cn("flex items-center gap-1", className)}>
+      <MessageActions className="has-[[data-bot-group-delivery]]:opacity-100">
+        <CopyRowAction
+          text={text}
+          rowId={rowId}
+          label={copyLabel}
+          tooltip={resolveTooltip(copyLabel)}
+        />
+        {entityId && onFeedbackChange ? (
+          <>
+            <MessageAction
+              aria-label={likeLabel}
+              aria-pressed={localFeedback === "like"}
+              label={likeLabel}
+              tooltip={resolveTooltip(likeLabel)}
+              data-testid={testId(TID_V4_FEEDBACK_LIKE, String(rowId))}
+              className={localFeedback === "like" ? "!bg-success/10" : undefined}
+              onClick={() => handleFeedback("like")}
             >
-              <ThumbsUpIcon className="size-3.5" />
-            </span>
-          </MessageAction>
-          <MessageAction
-            aria-label={dislikeLabel}
-            aria-pressed={localFeedback === "dislike"}
-            label={dislikeLabel}
-            tooltip={resolveTooltip(dislikeLabel)}
-            data-testid={testId(TID_V4_FEEDBACK_DISLIKE, String(rowId))}
-            className={localFeedback === "dislike" ? "!bg-warning/10" : undefined}
-            onClick={() => handleFeedback("dislike")}
-          >
-            <span
-              className={cn(
-                "relative inline-flex",
-                localFeedback === "dislike" && "zcode-reaction-burst",
-              )}
+              <span
+                className={cn(
+                  "relative inline-flex",
+                  localFeedback === "like" && "zcode-reaction-burst",
+                )}
+              >
+                <ThumbsUpIcon className="size-3.5" />
+              </span>
+            </MessageAction>
+            <MessageAction
+              aria-label={dislikeLabel}
+              aria-pressed={localFeedback === "dislike"}
+              label={dislikeLabel}
+              tooltip={resolveTooltip(dislikeLabel)}
+              data-testid={testId(TID_V4_FEEDBACK_DISLIKE, String(rowId))}
+              className={localFeedback === "dislike" ? "!bg-warning/10" : undefined}
+              onClick={() => handleFeedback("dislike")}
             >
-              <ThumbsDownIcon className="size-3.5" />
-            </span>
+              <span
+                className={cn(
+                  "relative inline-flex",
+                  localFeedback === "dislike" && "zcode-reaction-burst",
+                )}
+              >
+                <ThumbsDownIcon className="size-3.5" />
+              </span>
+            </MessageAction>
+          </>
+        ) : null}
+        {onFork && entityId ? (
+          <MessageAction
+            aria-label={forkLabel}
+            label={forkLabel}
+            tooltip={resolveTooltip(forkLabel)}
+            data-testid={testId(TID_V4_FORK, String(rowId))}
+            onClick={handleFork}
+          >
+            <TrendingUpDownIcon className="size-3.5" />
           </MessageAction>
-        </>
-      ) : null}
-      {onFork && entityId ? (
-        <MessageAction
-          aria-label={forkLabel}
-          label={forkLabel}
-          tooltip={resolveTooltip(forkLabel)}
-          data-testid={testId(TID_V4_FORK, String(rowId))}
-          onClick={handleFork}
-        >
-          <TrendingUpDownIcon className="size-3.5" />
-        </MessageAction>
-      ) : null}
-      {turnId && hookInvocations ? (
-        <ConversationHookDetailsAction rows={hookInvocations} turnId={turnId} />
-      ) : null}
+        ) : null}
+        {turnId && hookInvocations ? (
+          <ConversationHookDetailsAction rows={hookInvocations} turnId={turnId} />
+        ) : null}
+        {turnId ? (
+          <ConnectedBotGroupDeliveryAction turnId={turnId} sourceCommandIds={sourceCommandIds} />
+        ) : null}
+      </MessageActions>
       {/* Bugfix: 旧 conversation surface 删除后，V4 动作栏漏掉了消息创建时间；
-          时间是 row.createdAt 的只读派生展示，不新增 renderer 状态。 */}
+          时间是 row.createdAt 的只读派生展示，不新增 renderer 状态。
+          2026-11-08：时间戳渲染在 MessageActions 之外（它不是一个操作入口，且
+          外层容器负责排列）；同日起操作按钮也不再悬停显现 —— 用户反馈「鼠标放上去
+          才出现」等于找不到，改为常驻。 */}
       {timeLabel ? (
-        <span className="select-none text-ui-sm text-foreground-subtlest">{timeLabel}</span>
+        <span
+          className="select-none text-ui-sm text-foreground-subtlest"
+          data-v4-message-time="true"
+        >
+          {timeLabel}
+        </span>
       ) : null}
-      {turnId ? (
-        <ConnectedBotGroupDeliveryAction turnId={turnId} sourceCommandIds={sourceCommandIds} />
-      ) : null}
-    </MessageActions>
+    </div>
   );
 });
 
@@ -1796,9 +1815,10 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
           />
         </div>
       ) : null}
-      {/* 完成态动作行悬停显现（对齐旧 MessageActions）：复制 + fork（图标 ghost）。
+      {/* 完成态动作行常驻显示：复制 + fork（图标 ghost）。
           一轮对用户是一个回复：action 只在轮尾段（hideActions 由 TurnGroup 裁决），
-          复制内容 = 整轮全部 text 段合并（copyText 覆盖）。 */}
+          复制内容 = 整轮全部 text 段合并（copyText 覆盖）。
+          2026-11-08：原来是悬停显现，用户反馈找不到，改为常驻。 */}
       {row.state === "complete" && !hideActions && !deferActions ? (
         <ConversationAssistantTextActions
           rowId={row.rowId}
@@ -1811,12 +1831,7 @@ const AssistantTextRowView = memo(function AssistantTextRowView({
           onFork={onFork}
           onRetry={onRetry}
           onFeedbackChange={onFeedbackChange}
-          className={cn(
-            "mt-1",
-            context.compactForRemoteControl
-              ? "opacity-100"
-              : "opacity-0 transition-opacity group-hover/assistant-row:opacity-100 focus-within:opacity-100",
-          )}
+          className="mt-1"
         />
       ) : null}
     </RowShell>

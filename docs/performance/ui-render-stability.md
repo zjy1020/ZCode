@@ -27,7 +27,7 @@ Observed project-side symptoms:
 2. **Task row menu cost**
    - Keep the row itself mounted as the context-menu trigger.
    - Keep `TaskListItemContextMenu` and its file/provider-path loading limited to the opened context menu.
-   - Defer hover-only archive tooltip/action controls until the row is hovered or already in archive-confirming state.
+    - Defer hover-only archive tooltip/action controls until the row is hovered. Archiving is click-once since the interaction change recorded in [Task List Context Menu](../ui/task-list-context-menu.md), so the row-level archive-confirming state no longer exists and must not be re-introduced by the deferral logic.
    - Avoid rendering menu and hover action content for every idle task row.
 
 3. **Workspace shell props**
@@ -127,6 +127,31 @@ Follow-up repair plan:
 - Remove `max-height` from summary panel shell transitions. The panel may still snap between compact and expanded heights, but border/background/shadow transitions remain.
 - Add explicit `contain: layout style` boundaries around chat content and turn content. Avoid `content-visibility:auto`, `contain:paint`, and `contain:size` on turn shells so scroll height, message sizing, and visible table overflow semantics are unchanged.
 
+## 2026-11-08 Containment Boundary Landed
+
+User report: scrolling back through a long session felt laggy and occasionally a row did not
+paint for a frame. Auditing this plan against the code showed step 5's containment item had
+never been implemented — there were zero `contain:` declarations in the live conversation path.
+
+Implemented:
+
+- `packages/ui/src/v4/ConversationTimeline.tsx` virtual turn wrapper
+  (`data-v4-turn-unit="true"`) now carries the arbitrary utility `[contain:layout_style]`
+  (`contain: layout style`). Every mounted turn's internal layout is now independent, so
+  inserting or measuring one turn cannot dirty the layout of the rest of the document.
+
+Deliberately not implemented, with reasons:
+
+- The `data-v4-timeline-content-column` column was left alone: its children are the absolutely
+  positioned turn wrappers and it already has an explicit `height`, so layout containment there
+  cannot reduce any layout work.
+- No `contain: paint` / `contain: size` / `content-visibility: auto` on turn shells (wide
+  markdown tables must stay visible and the virtualizer needs real measured heights).
+- `contain: layout` makes the element a containing block for fixed-position descendants; this is
+  safe here because every overlay primitive in `packages/ui/src/components/ui/` (dialog, popover,
+  dropdown-menu, context-menu, select, tooltip, hover-card, toast, alert-dialog) portals to
+  `document.body`.
+
 ## 2026-06-28 Runtime CDP Follow-up
 
 The live app was inspected through Electron CDP after reproducing the resize gesture: double-clicking the application edge blank area to shrink and grow the window. Deep DOM traversal, including open shadow roots, matched the trace-scale DOM count and found the current large container:
@@ -144,3 +169,33 @@ Follow-up repair plan:
 - Gate only the heavy PreviewPane body. A code-viewer tab may render `PreviewPaneContent` only when its tab is active, the side pane is logically visible, and the side pane has enough viewport-intersecting inline width.
 - Preserve scroll metrics with a lightweight spacer while the heavy body is deferred, then restore `scrollTop` when the pane becomes visible again.
 - Skip auto-loading adjacent file chunks while the heavy body is deferred; otherwise an empty body can look like an under-filled viewport and trigger unnecessary hidden reads.
+
+## 2026-11-09 Settled Preview Content
+
+Reported symptom: opening a file that an agent is still writing (a ~77 KB / 1261-line HTML file
+appended to over ~90 s) froze the right side pane down to roughly two frames per second. The same
+file opened after writing finished was fine.
+
+Why: every heavy preview path is keyed on content, so a changing file recomputes the whole result
+per change.
+
+- `PatchFallbackContent` rebuilt the diff lines and re-inferred the language from the patch text,
+  then handed the new string to `@pierre/diffs` — whose `PatchDiff`/`CodeViewer` render is a
+  thousand-row shadow DOM (see the 2026-06-28 CDP notes above).
+- `HighlightedLightweightDiffPreview` re-ran main-thread Shiki tokenization on every change; the
+  guard (`HIGHLIGHTED_LIGHTWEIGHT_DIFF_MAX_CHARS = 120_000`) caps the size but not the frequency.
+- `CodeContent` (the `text` branch, i.e. the code-viewer tab) rebuilt its `CodeViewer` the same way.
+- The patch source key embeds a content hash (`workspaceSidePane.ts` → `hashCodeViewerContent`), so
+  a changing patch also produces a new tab key rather than an in-place update.
+
+Repair: `packages/ui/src/hooks/useSettledValue.ts` (`PREVIEW_SETTLE_MS = 250`) returns the previous
+stable value until the input has been quiet for one window, and returns the incoming value
+immediately on first render. It is applied at the three content seams above, so a file being
+written is tokenized/diffed once per quiet period instead of once per write burst, while an
+ordinary open still paints on the first frame.
+
+Deliberately not changed: the size guards (`FILE_VIEWER_MAX_TEXT_BYTES = 256 * 1024`,
+`HIGHLIGHTED_LIGHTWEIGHT_DIFF_MAX_CHARS = 120_000`, `MAX_PATCH_DIFF_SAFE_*` in
+`lib/patchDiffPreview.ts`) and `@pierre/diffs` itself. Coalescing removes the repeated work;
+lowering the caps or virtualizing the diff DOM would change navigation, comment and scroll-anchor
+behavior that the earlier follow-up plan already declined to touch.

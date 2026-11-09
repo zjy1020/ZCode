@@ -3354,9 +3354,31 @@ const enUS: Record<string, string> = {
   "settings.appearance.codeTitle": "Code settings",
   "settings.appearance.codeDescription":
     "Choose code themes, font size, and display options independently from the interface font size.",
+  "settings.appearance.codeThemeFollowsPack":
+    "The appearance extension layer is enabled: code block syntax colors follow the current color scheme and contrast level, so the code themes below are temporarily inactive.",
   "settings.uiFontSize": "UI font size",
   "settings.uiFontSizeDescription":
     "Adjust interface text without changing icons or layout dimensions.",
+  "settings.appearance.colorPack": "Color scheme",
+  "settings.appearance.colorPackDescription":
+    "Interface color theme; the extension layer only overrides colors, never layout.",
+  "settings.appearance.colorPack.native": "Z.ai default",
+  "settings.appearance.colorPack.everforest": "Everforest",
+  "settings.appearance.colorPackStrength": "Contrast",
+  "settings.appearance.colorPackStrengthDescription":
+    "Background depth for the same palette (Everforest Soft / Medium / Hard). The ramp on each card is that variant's real canvas-to-border ladder; click a card to apply.",
+  "settings.appearance.colorPackStrength.auto": "Follow default",
+  "settings.appearance.colorPackStrength.soft": "Soft",
+  "settings.appearance.colorPackStrength.medium": "Medium",
+  "settings.appearance.colorPackStrength.hard": "Hard",
+  "settings.appearance.uiFontFamily": "Interface font",
+  "settings.appearance.uiFontFamilyDescription":
+    "Font families for interface text, comma separated; leave empty to restore the default.",
+  "settings.appearance.uiFontFamilyPlaceholder": "Inter, Segoe UI",
+  "settings.appearance.codeFontFamily": "Code font",
+  "settings.appearance.codeFontFamilyDescription":
+    "Font families for code blocks, diffs, and monospaced text; leave empty to restore the default.",
+  "settings.appearance.codeFontFamilyPlaceholder": "JetBrains Mono, Consolas",
   "settings.systemTitle": "General",
   "settings.systemDescription": "These preferences affect the current window experience.",
   "settings.locale": "Language",
@@ -4660,6 +4682,36 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.models": "Model list",
   "settings.modelProvider.modelsEmpty": "No models are configured. Add a model to use it in chat.",
   "settings.modelProvider.addModel": "Add model",
+  "settings.modelProvider.fetchModels": "Fetch model list",
+  "settings.modelProvider.fetchModelsLoading": "Fetching…",
+  "settings.modelProvider.fetchModelsCount": "{count} models available — click to select",
+  "settings.modelProvider.fetchModelsEmpty":
+    "This API key has no models available on this provider (the provider returned an empty list). Grant models to the key in the provider console, or enter the model ID manually.",
+  "settings.modelProvider.fetchModelsUnsupported":
+    "This provider does not expose a model list endpoint. Enter the model ID manually.",
+  "settings.modelProvider.fetchModelsMissingCredentials":
+    "Save an API key first, then fetch the model list.",
+  "settings.modelProvider.fetchModelsFilterPlaceholder": "Filter models…",
+  "settings.modelProvider.fetchModelsExpandParams": "Expand parameters for {modelId}",
+  "settings.modelProvider.fetchModelsSelected": "{count} models selected",
+  "settings.modelProvider.fetchModelsAddSelected": "Add {count} models",
+  "settings.modelProvider.fetchModelsAddSelectedDone": "Added {count} models",
+  "settings.modelProvider.fetchModelsAddSelectedExisting":
+    "{count} already added — skipped",
+  "settings.modelProvider.fetchModelsAddSelectedFailed": "{count} failed: {names}",
+  "settings.modelProvider.fetchModelsAlreadyAdded": "Added",
+  "settings.modelProvider.fetchModelsEditorHint":
+    "Click a model name to select it (multiple allowed), or the arrow on the right to adjust that model's context window, max output, and advanced settings on its own.",
+  "settings.modelProvider.fetchModelsPickFirst":
+    "That list above is what the provider returned — click the model you want to add (multiple allowed), or type a model ID manually.",
+  "settings.modelProvider.modelParams": "Parameters",
+  "settings.appearance.fontPickerSearch": "Search fonts",
+  "settings.appearance.fontPickerEmpty": "No matching fonts",
+  "settings.appearance.fontPickerLoading": "Reading system fonts…",
+  "settings.appearance.fontPickerCustom": "Custom font family…",
+  "settings.appearance.fontPickerUnavailable":
+    "System font list is unavailable in this environment — type a family name",
+  "settings.appearance.fontPickerUseDefault": "Use default",
   "settings.modelProvider.modelId": "Model ID",
   "settings.modelProvider.modelDisplayName": "Display name",
   "settings.modelProvider.modelApiFormat.anthropic": "Anthropic messages",
@@ -6164,15 +6216,17 @@ const enUS: Record<string, string> = {
   "chat.toolbar.thoughtLevel.placeholder": "Select reasoning level",
   "chat.toolbar.thoughtLevel.description":
     "Adjust how much the agent thinks before answering. Higher effort is usually steadier but slower.",
-  "chat.toolbar.thoughtLevel.value.off": "Off",
-  "chat.toolbar.thoughtLevel.value.on": "On",
-  "chat.toolbar.thoughtLevel.value.minimal": "Minimal",
-  "chat.toolbar.thoughtLevel.value.low": "Low",
-  "chat.toolbar.thoughtLevel.value.medium": "Medium",
-  "chat.toolbar.thoughtLevel.value.high": "High",
-  "chat.toolbar.thoughtLevel.value.xhigh": "Extra high",
-  "chat.toolbar.thoughtLevel.value.max": "Max",
-  "chat.toolbar.thoughtLevel.value.ultra": "Ultra",
+  // Level names are deliberately not localized: what you see is what goes on the wire.
+  // Keep them identical to zh-CN so the toolbar reads the same in both languages.
+  "chat.toolbar.thoughtLevel.value.off": "off",
+  "chat.toolbar.thoughtLevel.value.on": "on",
+  "chat.toolbar.thoughtLevel.value.minimal": "minimal",
+  "chat.toolbar.thoughtLevel.value.low": "low",
+  "chat.toolbar.thoughtLevel.value.medium": "medium",
+  "chat.toolbar.thoughtLevel.value.high": "high",
+  "chat.toolbar.thoughtLevel.value.xhigh": "xhigh",
+  "chat.toolbar.thoughtLevel.value.max": "max",
+  "chat.toolbar.thoughtLevel.value.ultra": "ultra",
   "chat.longRunning.expand": "Expand long-running panel",
   "chat.longRunning.collapse": "Collapse long-running panel",
   "chat.longRunning.elapsedSeconds": "Running for {seconds}s",

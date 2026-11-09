@@ -712,6 +712,16 @@ export function createHomeOnlyWebRemoteControlServices(): RootServices {
       getView: async () => ({ revision: 0, providers: [] }),
       refresh: async () => ({ revision: 0, providers: [] }),
       testModelConnectivity: async () => ({ results: [] }),
+      // 手机 home 侧栏还没有 workspace bridge，没有可读的本机 Provider 配置。
+      // 显式回一个语义码，而不是走 createEmptyHomeOnlyService 的 `async () => undefined`，
+      // 否则设置页拿到 undefined 会当成 success 分支去读 .models 而崩。
+      listProviderModels: async () => ({
+        success: false as const,
+        error: {
+          code: "provider-unavailable" as const,
+          message: "Model list retrieval requires a connected host.",
+        },
+      }),
     }),
     modelSelectionService: createEmptyHomeOnlyService<RootServices["modelSelectionService"]>({
       getView: async () => ({ revision: 0, providers: [] }),

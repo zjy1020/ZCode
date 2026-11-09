@@ -2186,6 +2186,13 @@ function ConversationTimelineImpl({
                       // 它们的 containing block；正文响应式内边距必须落在 turn wrapper 自身。
                       className={cn(
                         "absolute left-0 top-0 w-full",
+                        // `docs/performance/ui-render-stability.md`（2026-06-28 p13 追踪）要求
+                        // 在 chat content / turn 边界加显式的 `contain: layout style`：一棵已挂载
+                        // 的长轮子树在滚动时不该让整份文档参与 layout（当时实测三个 90ms 的
+                        // UpdateLayoutTree，13k 元素重算）。这里只用 layout+style，**不要**加
+                        // `contain: paint/size` 或 `content-visibility`：宽表格允许溢出正文宽度，
+                        // 而且虚拟滚动依赖 ResizeObserver 量真实高度（layout 包含不影响自身尺寸）。
+                        "[contain:layout_style]",
                         clearsStatusPanel && CONVERSATION_STATUS_PANEL_TOP_CLEARANCE_CLASS_NAME,
                       )}
                       style={{ transform: `translateY(${virtualRow.start - headerSlotHeight}px)` }}

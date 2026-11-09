@@ -1475,8 +1475,12 @@ export const MessageResponse = memo(
       ],
       [renderZCodeFileCitations, workspaceHomePath, workspacePath],
     );
+    // 末尾这个标记 class 是「外观扩展层」的作用域锚点：扩展层的 Markdown 样式表
+    // 全部以 `.zcode-md` 为前缀，只作用于消息正文，不会碰到设置页/插件 UI 的 Markdown。
+    // 详见 packages/ui/src/theme-ext/markdown.ts 与 theme-ext/UPGRADE.md。
     const responseClassName = cn(
       "size-full text-ui-base leading-[1.75] tracking-wide [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+      "zcode-md",
       className,
     );
     const fallbackClassName = cn(responseClassName, "whitespace-pre-wrap break-words");

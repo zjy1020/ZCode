@@ -713,8 +713,7 @@ describe("虚拟项目旧产品体验", () => {
       .waitForExist();
     const archived = $('[data-testid="task-item-e2e-behavior-6"]');
     await archived.moveTo();
-    await archived.$('button[data-testid^="task-archive-"]').click();
-    await $('[data-archive-confirming-task-id="e2e-behavior-6"]').waitForExist();
+    // 交互调整：归档单击即生效，不再有二次确认态。
     await archived.$('button[data-testid^="task-archive-"]').click();
     await archived.waitForExist({ reverse: true });
     expect(await timeline.$$(taskSelector).length).toBe(29);

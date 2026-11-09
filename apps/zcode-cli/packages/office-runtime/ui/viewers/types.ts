@@ -69,6 +69,12 @@ export interface ViewerProps {
   bytes: ArrayBuffer;
   info: DocumentInfo;
   blocks?: DocxBlockKey[];
+  /**
+   * Locations the shell has already taken into the AI-edit draft, or collected with ⌘/Ctrl.
+   * Locators (the `at` half of an anchor), not full anchors — the grid collapses its own
+   * selection to the last click, so these are what keep earlier picks visible per cell.
+   */
+  marks?: readonly string[];
   dark: boolean;
   /** A short, non-interactive preview (inline card): first pages only, no scrolling. */
   glance?: boolean;

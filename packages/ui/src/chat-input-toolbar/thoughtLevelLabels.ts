@@ -1,4 +1,9 @@
 // 纯展示词表：工作流分享页不可经工具栏组件引入 Desktop 状态和服务。
+//
+// 词表指向的那几个文案是**语言无关的档位标识**（off / minimal / low / medium / high /
+// xhigh / max / ultra），不是可翻译的界面文字：用户看到的必须就是请求里发的那个值，
+// 这样他能直接拿去对供应商文档。多语言由 IntlProvider 提供，但两种语言的这些词条
+// 刻意写成同一个标识，改它们等于改「显示值 ↔ 请求值」的对应关系，别顺手翻译。
 const THOUGHT_LEVEL_LABEL_IDS: Record<string, string> = {
   disabled: "chat.toolbar.thoughtLevel.value.off",
   false: "chat.toolbar.thoughtLevel.value.off",

@@ -126,24 +126,10 @@ function requireTaskId(value: string | null): string {
 async function archiveProjectTask(taskId: string) {
   const row = await $(`[data-testid="${testId(TID_TASK_ITEM, taskId)}"]`);
   await row.moveTo();
+  // 交互调整：归档改成单击即生效，不再有“首击进入待确认态、二次点击才归档”。
   await clickTestIdByDom(testId(TID_TASK_ARCHIVE, taskId), {
     timeout: 15_000,
     timeoutMsg: "TSL20 归档按钮没有出现",
-  });
-  await browser.waitUntil(
-    () =>
-      browser.execute(
-        (id) => {
-          const button = document.querySelector(`[data-testid="${id}"]`);
-          return Boolean(button?.closest("[data-archive-confirming-task-id]"));
-        },
-        testId(TID_TASK_ARCHIVE, taskId),
-      ),
-    { timeout: 10_000, timeoutMsg: "TSL20 归档没有进入确认态" },
-  );
-  await clickTestIdByDom(testId(TID_TASK_ARCHIVE, taskId), {
-    timeout: 10_000,
-    timeoutMsg: "TSL20 归档确认按钮没有出现",
   });
 }
 

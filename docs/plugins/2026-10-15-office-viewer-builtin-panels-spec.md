@@ -193,3 +193,79 @@ session 2 面板  ─ load / report_view ─┘  session_id = s2   ├─ s1：c
 | 句柄读完最后一块即释放；淘汰中的加载不登记句柄           | office-runtime/src/app/sessions.test.ts                                                                                                                 |
 | 导入槽位按 session 计                                    | office-runtime/src/adapters/files.test.ts                                                                                                               |
 | 桌面多 session 真机                                      | macOS 开发实例人工验收通过（agent 日志中多个 session 的 `mcp.pool.lease.acquired` 指向同一 `mcpTransportPid`）；桌面 E2E、Windows/Linux、远程工作区待补 |
+
+## 9. 选区多选与「AI 对话编辑」草稿（2026-11-08）
+
+### 9.1 问题
+
+面板的选区工具条只有「添加 / 提问 / 复制」三个入口，且一次只能作用于一个选区：
+
+- 表格里想同时引用 `A1:A10` 与 `C1` 只能分两次「添加」，工具条上看出发生了什么；按住 Ctrl 再选只会**替换**掉上一个选区。
+- 「提问」是**一次一问、回车即发送**：写了问题按回车，消息立刻以用户身份发出去，不能连问两处、也不能在发送前回头改。用户的实际用法是「先把 A1:A15 的问题写好，再选 C1 写第二个问题，两条分开列着一起发」。
+
+### 9.2 多选范围（⌘/Ctrl）
+
+- 网格里按下指针或按键时**带着 ⌘/Ctrl**：新选区不替换旧选区，旧选区被压入「已选范围」，新选区成为当前选区。工具条与「添加 / AI 对话编辑」按**全部范围**工作。
+- 工具条上的范围标签并列显示，顺序即选择顺序：`Sheet1 · A1:A10, Sheet1 · C1`。
+- 不带修饰键的普通点击仍是单选（替换），行为与今天完全一致 —— 修饰键是纯粹的加法。
+- 已选范围在下列时机清空：切换文档、`clearSelection`（点空白 / Esc）、面板关闭、工具栏「查找」打开。
+- **不做**网格内多块高亮：查看器的标记绘制通道（`ViewerHandle.reveal`）被 Agent 标注占用，两条来源共用一个索引空间会让 `onRevealHit` 的命中判定错位。工具条上的范围列表就是多选的可见反馈。
+
+### 9.3 「AI 对话编辑」
+
+工具条第二个按钮的文案由「提问 / Ask」改为「AI 对话编辑 / AI edit」，交互从「一次一问」改为**草稿列表**：
+
+```
+┌──────────────────────────────────┐
+│ Sheet1 · A1:A10, Sheet1 · C1      │  ← 本次要作用的范围（可多个）
+├──────────────────────────────────┤
+│ A1:A10 · 让这一列求和              │  ← 已加入的行，逐行可移除
+│ C1     · 改成百分比                │
+├──────────────────────────────────┤
+│ [描述你想让 AI 怎么改…]            │  ← 输入区
+│ ↵ 加入           [取消] [发送 2 条] │
+└──────────────────────────────────┘
+```
+
+- **回车**（不带 Shift）或点「加入」：把当前输入与当前范围追加成一行，输入区清空，**面板不关、什么都不发**。
+- 点行尾的移除按钮：删掉那一行。
+- 点「发送 N 条」：把全部行按 `范围 · 问题` 用换行拼成**一条**用户消息，经 `ui/message` 发出；成功后清空草稿并收起面板。失败沿用既有 `sendFailed` 提示，草稿保留。
+- 「添加」按钮不变：仍把全部范围经 `ui/update-model-context` 附加到下一条消息，不发送。
+- 草稿列表**存在宿主（`ui/main.tsx`）而不是工具条组件里**：工具条的 `key` 是选区标识，选下一个范围时组件会整体重挂，放在组件内的 state 会连同用户已经写好的问题一起丢掉。
+
+### 9.4 文案
+
+`ui/i18n.ts` 增删（中英同键）：
+
+| 键 | en | zh-CN |
+| --- | --- | --- |
+| `ask`（改文案） | `AI edit` | `AI 对话编辑` |
+| `askPlaceholder`（改文案） | `Describe the change you want…` | `描述你想让 AI 怎么改…` |
+| `askMultiHint` | `Hold ⌘/Ctrl to select more` | `按住 ⌘/Ctrl 可多选其他区域` |
+| `askAddLine` | `Add line` | `加入` |
+| `askLineKey` | `add` | `加入` |
+| `askRemoveLine` | `Remove this line` | `移除这一行` |
+| `askDraftEmpty` | `Nothing added yet.` | `还没有加入任何一条。` |
+| `askSendAll` | `(count) => Send ${count}` | `(count) => 发送 ${count} 条` |
+| `askRanges` | `Ranges` | `作用范围` |
+
+### 9.5 覆盖
+
+| 场景 | 覆盖位置 |
+| --- | --- |
+| 多范围拼装（顺序、去重、清空时机） | `office-runtime/ui/main.tsx`（`pins` / `ranges`）＋ `scripts/smoke.mjs` 的面板冒烟 |
+| 草稿列表的加行 / 移除 / 汇总拼装 | `office-runtime/ui/shell/parts.tsx`（`SelectionBar`，`askDraft` 系列 props） |
+| 端到端（真实沙箱里选两处、写两行、发送一条消息） | `office-runtime/scripts/e2e.mjs`（Chrome + MCP Apps CSP） |
+
+### 9.6 发送入口不依赖选区（2026-11-08 补）
+
+选完两块、不想再选第三块时必须能直接发。工具条只在有选区时存在（它靠选区定位），所以草稿一旦失去选区就会变得没有入口 —— 用户唯一的「回到发送按钮」的路就是再选一个范围，这既反直觉又白费一次点击。
+
+三处修正：
+
+1. **⌘/Ctrl+↵ 直接发送全部**：`ui/shell/parts.tsx` 的 `SelectionBar` 在 Enter 分支之前先判 `(event.metaKey || event.ctrlKey)` → `sendAll()`。没写完的输入框内容也算一条（与点主按钮同一条路径）。行内提示改为 `↵ 加入 · ⌘/Ctrl+↵ 直接发送全部`。
+2. **`ask-dock`（待发送浮条）**：`ui/main.tsx` 在「有草稿但没有选区」时渲染 `<div className="ask-dock">`：`已加入 N 条待发送` + `点表格任意区域可继续加入，或现在就发送。` + `发送 N 条`（直接调 `sendAskDraft("")`）。样式在 `ui/panel.css`，与 `.chip` 同族（绝对定位、底部居中）。
+3. **草稿仍然归宿主**：`askDraft` 一直放在 `ui/main.tsx`，所以浮条消失、工具条重挂、切换范围都不会丢行。
+
+i18n 随之加三个键（中英同键）：`askSendKey`、`askDockPending(count)`、`askDockHint`。
+

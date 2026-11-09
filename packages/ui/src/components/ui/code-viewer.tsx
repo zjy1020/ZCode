@@ -10,13 +10,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trash2Icon } from "lucide-react";
 import type { FileContents, LineAnnotation, SupportedLanguages } from "@pierre/diffs";
 import { File, type FileOptions } from "@pierre/diffs/react";
-import type { BundledTheme } from "shiki";
 
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { Textarea } from "@/components/ui/textarea.js";
+import { useCodeThemeRevision } from "@/hooks/useCodeThemeRevision.js";
 import type { CodeCommentPreview, CodeCommentRange } from "@/lib/codeCommentContext.js";
-import { isDarkCodePreviewTheme } from "@/lib/codePreviewPreferences.js";
+import { CODE_THEME_VARIABLES_NAME, getCodeThemeVariablesName } from "@/lib/codeThemeBridge.js";
+import {
+  isDarkCodePreviewTheme,
+  type CodePreviewThemeName,
+} from "@/lib/codePreviewPreferences.js";
 import { DIFFS_PREFERRED_HIGHLIGHTER } from "@/lib/diffsHighlighterEngine.js";
 import {
   formatCommandShortcutLabel,
@@ -40,7 +44,7 @@ export interface CodeViewerProps extends HTMLAttributes<HTMLDivElement> {
   enableSyntaxHighlighting?: boolean;
   language: string;
   showLineNumbers?: boolean;
-  theme?: BundledTheme;
+  theme?: CodePreviewThemeName;
   wrapLongLines?: boolean;
   fontSizePx?: number;
   firstLineNumber?: number;
@@ -67,8 +71,13 @@ export interface CodeViewerProps extends HTMLAttributes<HTMLDivElement> {
   scrollContainerRef?: Ref<HTMLDivElement>;
 }
 
-export function resolveCodeViewerColorScheme(theme?: BundledTheme): "light" | "dark" {
-  if (!theme) {
+export function resolveCodeViewerColorScheme(theme?: CodePreviewThemeName): "light" | "dark" {
+  // 变量主题（外观扩展层接管）的明暗只看当前界面，不能按主题名猜：
+  // `@pierre/diffs` 的 CSS 变量主题 `type` 固定是 `dark`（那是库内部约定，只影响
+  // 阴影里的 `color-scheme`，不参与取色），而 `isDarkCodePreviewTheme` 只认识设置页
+  // 列出的 10 个自带主题，会把变量主题误判成浅色，于是浅色界面上代码块的滚动条、
+  // 行号等本地颜色会按深色画。
+  if (!theme || theme === CODE_THEME_VARIABLES_NAME) {
     if (typeof document !== "undefined" && document.documentElement.classList.contains("dark")) {
       return "dark";
     }
@@ -251,13 +260,17 @@ function createCodeViewerFile(params: {
   code: string;
   enableSyntaxHighlighting: boolean;
   language: string;
-  theme?: BundledTheme;
+  theme?: CodePreviewThemeName;
+  themeRevision?: string | null;
 }): FileContents {
   const lang = params.enableSyntaxHighlighting
     ? (params.language as SupportedLanguages)
     : ("text" as SupportedLanguages);
   const name = params.language ? `preview.${params.language}` : "preview.txt";
-  const themeCacheKey = params.theme ?? "auto";
+  // 变量主题的名字恒定，光看名字分辨不出「换了档位」：修订号必须一起进 key，
+  // 否则同一配色包的 soft → hard 会继续命中旧高亮（颜色本身由 CSS 变量决定，
+  // 但已渲染的 token 不会自己重画）。
+  const themeCacheKey = `${params.theme ?? "auto"}@${params.themeRevision ?? "static"}`;
 
   return {
     name,
@@ -480,15 +493,20 @@ export function CodeViewer({
     () => ({ ...DEFAULT_CODE_COMMENT_LABELS, ...labelOverrides }),
     [labelOverrides],
   );
+  // 外观扩展层接管时，代码配色改由根元素上的 `--diffs-*` 变量决定：主题名变成恒定的
+  // 变量主题名，只有变量值随「明暗 + 档位」变，所以还需要修订号来驱动重画。
+  const codeThemeRevision = useCodeThemeRevision();
+  const resolvedTheme: CodePreviewThemeName | undefined = getCodeThemeVariablesName() ?? theme;
   const file = useMemo(
     () =>
       createCodeViewerFile({
         code,
         enableSyntaxHighlighting,
         language,
-        theme,
+        theme: resolvedTheme,
+        themeRevision: codeThemeRevision,
       }),
-    [code, enableSyntaxHighlighting, language, theme],
+    [code, codeThemeRevision, enableSyntaxHighlighting, language, resolvedTheme],
   );
   const lineAnnotations = useMemo<LineAnnotation<CodeViewerAnnotationMetadata>[]>(() => {
     const annotations: LineAnnotation<CodeViewerAnnotationMetadata>[] = [];
@@ -682,7 +700,7 @@ export function CodeViewer({
       disableFileHeader: true,
       disableLineNumbers: !showLineNumbers,
       overflow: wrapLongLines ? "wrap" : "scroll",
-      theme,
+      theme: resolvedTheme,
       preferredHighlighter: DIFFS_PREFERRED_HIGHLIGHTER,
       enableLineSelection: canUseCommentLineSelection,
       enableGutterUtility: canUseCommentGutterUtility,
@@ -702,8 +720,8 @@ export function CodeViewer({
       handleGutterUtilitySelection,
       handleLineSelectionEnd,
       markedLinesCss,
+      resolvedTheme,
       showLineNumbers,
-      theme,
       wrapLongLines,
     ],
   );
@@ -712,7 +730,7 @@ export function CodeViewer({
       // 手机远控页面可能是深色主题，但浏览器系统偏好仍是浅色。
       // @pierre/diffs 的 token 颜色依赖 color-scheme/light-dark()，必须跟随代码主题显式指定，
       // 否则 text 代码块会在深色卡片上渲染成浅色主题的深色文字，看起来像正文丢失。
-      colorScheme: resolveCodeViewerColorScheme(theme),
+      colorScheme: resolveCodeViewerColorScheme(resolvedTheme),
       "--diffs-bg": "var(--color-background)",
       "--diffs-light-bg": "var(--color-background)",
       "--diffs-dark-bg": "var(--color-background)",
@@ -725,7 +743,7 @@ export function CodeViewer({
       ),
       ...style,
     }),
-    [canUseCommentGutterUtility, fontSizePx, labels.addCommentTooltip, style, theme],
+    [canUseCommentGutterUtility, fontSizePx, labels.addCommentTooltip, resolvedTheme, style],
   );
   const assignCodeViewerScrollContainerRef = useCallback(
     (node: HTMLDivElement | null) => {

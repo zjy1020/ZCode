@@ -1,6 +1,13 @@
-import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from "shiki";
+import type {
+  BundledLanguage,
+  BundledTheme,
+  HighlighterGeneric,
+  ThemeRegistration,
+  ThemedToken,
+} from "shiki";
 import { bundledLanguages, bundledLanguagesInfo, createHighlighter } from "shiki";
 import { logger } from "@/logger.js";
+import { getCodeThemeOverride } from "@/lib/codeThemeBridge.js";
 import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
 
 export interface TokenizedCode {
@@ -66,41 +73,81 @@ uiMemoryDiagnosticsRegistry.register("shiki", () => ({
   highlighters: highlighterCache.size,
 }));
 
-const getResolvedCodeTheme = (theme?: BundledTheme): BundledTheme => {
+/**
+ * 本次高亮要用的主题。
+ *
+ * 刻意做成判别联合，而不是「名字 + 可空对象」：自带主题交给 shiki 加载，扩展层主题是
+ * 现成的对象，必须交给 `createHighlighter` 一起注册，两条路的参数类型不同，
+ * 用 `kind` 分开后两个分支各自都是精确类型，不需要 `as`、也不需要把
+ * `BundledTheme` 放宽成 `string`。
+ */
+type ResolvedCodeTheme =
+  | { readonly kind: "bundled"; readonly name: BundledTheme; readonly registration: null }
+  | {
+      readonly kind: "override";
+      readonly name: string;
+      readonly registration: ThemeRegistration;
+    };
+
+/**
+ * 解析本次要高亮用的主题。优先级：
+ *
+ * 1. **扩展层覆盖**（`theme-ext` 的配色包 + 明暗 + 档位算出的主题对象）；
+ * 2. 调用方传入的具名主题；
+ * 3. 跟随 `.dark` 的 `github-dark` / `github-light`。
+ *
+ * 第 1 条压过第 2 条是有意的：调用方传的是设置页「代码配色」下拉里的 shiki 自带主题，
+ * 扩展层启用时那份设置不再决定代码块颜色（见 `docs/ui-theme-extension-layer.md` §8）。
+ * 没有 provider（未启用扩展层、或配色包为 `native`）时行为与本移植前完全一致。
+ */
+const getResolvedCodeTheme = (theme?: BundledTheme): ResolvedCodeTheme => {
+  const override = getCodeThemeOverride();
+  if (override) {
+    // 桥只能用 `unknown` 传主题对象（它刻意不认识 shiki 的类型，否则扩展层要依赖
+    // shiki）。结构由 `theme-ext/codeTheme.ts` 保证（name/type/colors/settings 齐全，
+    // 正是 `ThemeRegistration`），在这里收敛成 shiki 类型，不再往下扩散。
+    const registration = override.theme as ThemeRegistration;
+    // shiki 按 `theme.name` 注册主题；桥给出的 name 与它同源，但万一不一致就以注册名
+    // 为准，否则后面 `codeToTokens({ theme })` 会找不到主题。
+    return { kind: "override", name: registration.name ?? override.name, registration };
+  }
+
   if (theme) {
-    return theme;
+    return { kind: "bundled", name: theme, registration: null };
   }
 
   if (typeof document !== "undefined" && document.documentElement.classList.contains("dark")) {
-    return "github-dark";
+    return { kind: "bundled", name: "github-dark", registration: null };
   }
 
-  return "github-light";
+  return { kind: "bundled", name: "github-light", registration: null };
 };
 
 const getCodeTokensCacheKey = (
   code: string,
   language: BundledLanguage,
-  theme: BundledTheme,
+  themeName: string,
 ) => {
   const start = code.slice(0, 100);
   const end = code.length > 100 ? code.slice(-100) : "";
-  return `${theme}:${language}:${code.length}:${start}:${end}`;
+  return `${themeName}:${language}:${code.length}:${start}:${end}`;
 };
 const getHighlighter = (
   language: BundledLanguage,
-  theme: BundledTheme,
+  theme: ResolvedCodeTheme,
 ): Promise<HighlighterGeneric<BundledLanguage, BundledTheme>> => {
-  const cacheKey = `${theme}:${language}`;
+  const cacheKey = `${theme.name}:${language}`;
   const cached = highlighterCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const highlighterPromise = createHighlighter({
-    langs: [language],
-    themes: [theme],
-  });
+  // 缓存键用的是主题名，所以扩展层换档（名字跟着换）不会命中上一档的 highlighter；
+  // 自带主题仍然只传名字，由 shiki 自己加载。
+  const highlighterPromise =
+    theme.kind === "override"
+      ? createHighlighter({ langs: [language], themes: [theme.registration] })
+      : createHighlighter({ langs: [language], themes: [theme.name] });
 
   highlighterCache.set(cacheKey, highlighterPromise);
   return highlighterPromise;
@@ -138,7 +185,7 @@ export const highlightCode = (
 
   const resolvedTheme = getResolvedCodeTheme(theme);
   const resolvedLanguage = normalizeCodeLanguage(language);
-  const tokensCacheKey = getCodeTokensCacheKey(code, resolvedLanguage, resolvedTheme);
+  const tokensCacheKey = getCodeTokensCacheKey(code, resolvedLanguage, resolvedTheme.name);
 
   const cached = tokensCache.get(tokensCacheKey);
   if (cached) {
@@ -168,7 +215,7 @@ export const highlightCode = (
 
       const result = highlighter.codeToTokens(code, {
         lang: langToUse,
-        theme: resolvedTheme,
+        theme: resolvedTheme.kind === "override" ? resolvedTheme.registration : resolvedTheme.name,
       });
 
       const tokenized: TokenizedCode = {
@@ -191,7 +238,7 @@ export const highlightCode = (
     .catch((error) => {
       // Shiki 加载或 tokenize 失败，组件会停留在无高亮的 rawTokens 状态。
       logger.error(
-        `[ShikiHighlighter] 代码高亮失败: language=${resolvedLanguage}, theme=${resolvedTheme}`,
+        `[ShikiHighlighter] 代码高亮失败: language=${resolvedLanguage}, theme=${resolvedTheme.name}`,
         error,
       );
       subscribers.delete(tokensCacheKey);

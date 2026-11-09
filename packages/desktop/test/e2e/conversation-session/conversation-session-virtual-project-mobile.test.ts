@@ -338,10 +338,7 @@ describe("虚拟项目手机 shared-host 导航", () => {
         .getByTestId("conversation-section")
         .getByTestId(`task-item-${CURRENT_IMPORTED_TASK_ID}`)
         .waitFor();
-      await imported.locator('button[data-testid^="task-archive-"]').tap();
-      await page
-        .locator(`[data-archive-confirming-task-id="${CURRENT_IMPORTED_TASK_ID}"]`)
-        .waitFor();
+      // 交互调整：归档单击即生效，不再有二次确认态。
       await imported.locator('button[data-testid^="task-archive-"]').tap();
       await imported.waitFor({ state: "detached" });
       enterStage("VP24/31 mobile project actions");

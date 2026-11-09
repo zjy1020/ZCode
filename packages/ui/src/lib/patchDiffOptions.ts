@@ -1,6 +1,7 @@
 import type { FileDiffOptions } from "@pierre/diffs";
 import type { BundledTheme } from "shiki";
 
+import { resolveCodePreviewThemePair } from "@/lib/codePreviewPreferences.js";
 import { DIFFS_PREFERRED_HIGHLIGHTER } from "@/lib/diffsHighlighterEngine.js";
 import type { ResolvedTheme } from "@/useTheme.js";
 
@@ -72,10 +73,9 @@ export function createPatchDiffOptions(
     // 把大段未改动区域退化成轻量空白分隔，避免视觉上抢走改动本身的注意力。
     hunkSeparators: options?.separatorStyle ?? "line-info",
     overflow: codePreviewSettings.wrapLongLines ? "wrap" : "scroll",
-    theme: {
-      light: codePreviewSettings.lightTheme,
-      dark: codePreviewSettings.darkTheme,
-    },
+    // 外观扩展层接管时两个槽位都是变量主题名（颜色全由 `--diffs-*` 决定），否则是设置页选的
+    // 自带主题；分辨逻辑集中在 `codePreviewPreferences` 里，见该文件的 `resolveCodePreviewThemePair`。
+    theme: resolveCodePreviewThemePair(codePreviewSettings),
     themeType: resolvedTheme,
     preferredHighlighter: DIFFS_PREFERRED_HIGHLIGHTER,
     unsafeCSS: PATCH_DIFF_UNSAFE_CSS,

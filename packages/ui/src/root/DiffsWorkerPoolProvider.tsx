@@ -5,6 +5,7 @@ import {
   type WorkerInitializationRenderOptions,
 } from "@pierre/diffs/react";
 import { createDiffsWorkerHighlighterOptions } from "@/lib/diffsHighlighterEngine.js";
+import { useCodeThemeRevision } from "@/hooks/useCodeThemeRevision.js";
 import { logger } from "@/logger.js";
 import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/store/index.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
@@ -63,6 +64,9 @@ export function DiffsWorkerPoolProvider({ children }: { children: ReactNode }) {
   const codePreviewSettings = useZCodeStore(
     (state) => state.codePreviewSettings ?? DEFAULT_CODE_PREVIEW_SETTINGS,
   );
+  // 外观扩展层接管代码配色时，主题名恒定、只有 CSS 变量变，所以光看设置值重算不出来；
+  // 修订号一变就重建 options，`WorkerRenderOptionsSync` 会把新的渲染参数同步给 worker。
+  const codeThemeRevision = useCodeThemeRevision();
 
   const highlighterOptions = useMemo<WorkerInitializationRenderOptions>(
     () =>
@@ -70,7 +74,7 @@ export function DiffsWorkerPoolProvider({ children }: { children: ReactNode }) {
         lightTheme: codePreviewSettings.lightTheme,
         darkTheme: codePreviewSettings.darkTheme,
       }),
-    [codePreviewSettings.darkTheme, codePreviewSettings.lightTheme],
+    [codePreviewSettings.darkTheme, codePreviewSettings.lightTheme, codeThemeRevision],
   );
 
   const poolSize = useMemo(() => resolveWorkerPoolSize(), []);

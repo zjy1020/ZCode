@@ -8,8 +8,8 @@ import { selectUpstreamModel } from "#e2e/helpers/upstream-provider";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseRemoteWorkspaceIdentity } from "@zcode/shared";
-import { TID_TASK_ARCHIVE, TID_TASK_ITEM, testId } from "@zcode/shared/test-ids";
-import { clearAppData, clickTestIdByDom } from "../helpers/desktop-app.js";
+import { TID_TASK_ITEM, testId } from "@zcode/shared/test-ids";
+import { clearAppData } from "../helpers/desktop-app.js";
 import {
   connectSSHWorkspaceAndSendFirstTurn,
   prepareSSHLifecycle,
@@ -158,12 +158,8 @@ describe(`${CASE_MARKER}: 多 Source task 的置顶/归档写操作命中原 Sou
     facts.unpinAvailable = unpinVisible;
     expect(unpinVisible).toBe(true);
 
-    // 归档 task B：归档按钮需二次确认（同一按钮再点一次）。
+    // 归档 task B：交互调整后单击即生效，不再有二次确认按钮。
     await clickTaskAction(taskB, "归档任务");
-    await clickTestIdByDom(testId(TID_TASK_ARCHIVE, taskB), {
-      timeout: 10_000,
-      timeoutMsg: `${CASE_MARKER}: 归档确认按钮没有出现`,
-    }).catch(() => undefined);
     await browser.waitUntil(async () => !(await readTaskOrder()).includes(taskB), {
       timeout: 20_000,
       timeoutMsg: `${CASE_MARKER}: 归档后 B 仍在列表`,
